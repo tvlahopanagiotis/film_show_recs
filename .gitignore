@@ -1,0 +1,40 @@
+# Secrets
+.env
+*.env
+
+# Personal ratings (user-supplied, not part of the repo)
+films/my_ratings.csv
+imdb_ratings_new.csv
+
+# Generated data — large dataset files
+films/data/ml-25m/
+ml-latest/
+
+# Generated data — parquet files (rebuilt by ingest.py / match.py)
+films/data/*.parquet
+shows/data/*.parquet
+
+# Recommendation outputs (personal, generated at runtime)
+films/data/recommendations_*.json
+shows/data/tv_recommendations_*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+.Rhistory
+
+# Editor
+.idea/
+.vscode/
+*.swp
