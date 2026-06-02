@@ -115,6 +115,13 @@ NEGATIVE_KEYWORDS = [
 # Franchise title markers applied directly against the show title
 FRANCHISE_TITLE_MARKERS = ["marvel's", "dc's"]
 
+# ── Era bonus ─────────────────────────────────────────────────────────────────
+ERA_2020_MIN = 2020
+ERA_2020_BONUS = 2
+
+# ── Recent picks ──────────────────────────────────────────────────────────────
+RECENT_ERA_MIN_YEAR = 2020
+
 # ── Mood modifiers ────────────────────────────────────────────────────────────
 MOOD_BONUSES: dict[str, dict[str, int]] = {
     "tense": {
@@ -154,6 +161,7 @@ def score_show(
     n_neighbours: int,
     top_neighbour_similarity: float,
     mood: str = "any",
+    year: Optional[int] = None,
 ) -> tuple[float, list[str], str]:
     """
     Score a candidate show. Returns (taste_score, reasons, category).
@@ -230,7 +238,12 @@ def score_show(
             score += penalty
             reasons.append(f"{label} ({penalty})")
 
-    # 9. Mood modifier
+    # 9. Era bonus for recent shows
+    if year is not None and year >= ERA_2020_MIN:
+        score += ERA_2020_BONUS
+        reasons.append(f"Recent era {year} (+{ERA_2020_BONUS})")
+
+    # 10. Mood modifier
     if mood != "any" and mood in MOOD_BONUSES:
         mood_delta = sum(MOOD_BONUSES[mood].get(g, 0) for g in genre_set)
         if mood_delta != 0:
@@ -250,10 +263,17 @@ def score_show(
     return score, reasons, category
 
 
+def _year_int(y) -> int:
+    try:
+        return int(y)
+    except (TypeError, ValueError):
+        return 0
+
+
 def score_and_select(candidates: "pd.DataFrame", mood: str = "any") -> dict:
     """
-    Score all candidates and split into safe_bets and wild_cards.
-    Returns {"safe_bets": [...], "wild_cards": [...], "all_scored": [...]}.
+    Score all candidates and split into safe_bets, wild_cards, and recent_picks.
+    Returns {"safe_bets": [...], "wild_cards": [...], "recent_picks": [...], "all_scored": [...]}.
     """
     n_neighbours = len(candidates)  # rough proxy; actual count passed separately
     scored = []
@@ -267,6 +287,14 @@ def score_and_select(candidates: "pd.DataFrame", mood: str = "any") -> dict:
         else:
             genres = []
 
+        raw_year = row.get("year")
+        year_val: Optional[int] = None
+        if raw_year is not None:
+            try:
+                year_val = int(raw_year)
+            except (TypeError, ValueError):
+                pass
+
         taste_score, reasons, category = score_show(
             title=row.get("title", ""),
             genres=genres,
@@ -279,6 +307,7 @@ def score_and_select(candidates: "pd.DataFrame", mood: str = "any") -> dict:
             n_neighbours=n_neighbours,
             top_neighbour_similarity=row.get("top_neighbour_similarity", 0),
             mood=mood,
+            year=year_val,
         )
 
         scored.append({
@@ -308,8 +337,17 @@ def score_and_select(candidates: "pd.DataFrame", mood: str = "any") -> dict:
         fallback = [s for s in scored if s["taste_score"] >= SAFE_BET_FALLBACK_THRESHOLD]
         safe_bets = fallback[:3]
 
+    already_shown = {s["title"] for s in safe_bets[:3] + wild_cards[:2]}
+    recent_picks = [
+        s for s in scored
+        if _year_int(s.get("year")) >= RECENT_ERA_MIN_YEAR
+        and s["taste_score"] >= WILD_CARD_THRESHOLD
+        and s["title"] not in already_shown
+    ][:3]
+
     return {
         "safe_bets": safe_bets[:3],
         "wild_cards": wild_cards[:2],
+        "recent_picks": recent_picks,
         "all_scored": scored,
     }

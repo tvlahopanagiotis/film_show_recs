@@ -8,7 +8,9 @@ imdb_ratings_new.csv
 
 # Generated data — large dataset files
 films/data/ml-25m/
+films/data/ml-32m/
 ml-latest/
+movielense-latest/
 
 # Generated data — parquet files (rebuilt by ingest.py / match.py)
 films/data/*.parquet

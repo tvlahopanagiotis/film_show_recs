@@ -1,6 +1,6 @@
 # recs
 
-A personal recommendation system for films and TV shows, built on collaborative filtering. Two completely independent pipelines — one powered by the MovieLens 25M dataset, one by Trakt.tv — each with a CLI, a Streamlit dashboard, and a Stremio addon.
+A personal recommendation system for films and TV shows, built on collaborative filtering. Two completely independent pipelines — one powered by the MovieLens ml-32m dataset (covers up to 2023), one by Trakt.tv — each with a CLI, a Streamlit dashboard, and a Stremio addon.
 
 ---
 
@@ -11,7 +11,7 @@ Both systems work the same way:
 1. Find users in a large dataset who have similar taste to yours (your "neighbours")
 2. Collect everything they rated highly that you haven't seen
 3. Score each candidate using a deterministic, tunable taste scorer
-4. Output **Safe Bets** (high confidence matches) and **Wild Cards** (lower confidence but potentially interesting)
+4. Output **Safe Bets** (high confidence matches), **Wild Cards** (lower confidence but potentially interesting), and **Recent Picks** (2020+ films discovered via TMDB recommendations)
 
 The scoring is entirely local and deterministic — no LLMs, no external recommendation APIs. Every weight and threshold is a named constant you can tune.
 
@@ -21,17 +21,18 @@ The scoring is entirely local and deterministic — no LLMs, no external recomme
 
 ```
 recs/
-├── films/              ← MovieLens 25M collaborative filtering for movies
+├── films/              ← MovieLens ml-32m collaborative filtering for movies
 │   ├── src/
 │   │   ├── ingest.py       # download + preprocess MovieLens dataset
 │   │   ├── match.py        # find your 200 nearest neighbours
 │   │   ├── candidates.py   # collect films your neighbours loved
 │   │   ├── scorer.py       # deterministic taste scorer (all weights here)
 │   │   ├── recommend.py    # interactive CLI entry point
+│   │   ├── tmdb_recent.py  # fetch post-2020 candidates via TMDB recommendations
 │   │   └── session.py      # SessionPrefs dataclass
-│   ├── data/               # parquet files + ml-25m/ dataset (generated)
+│   ├── data/               # parquet files + ml-32m/ dataset (generated)
 │   ├── my_ratings.csv      # your IMDb export goes here
-│   └── .env                # OMDB_API_KEY (optional)
+│   └── .env                # TMDB_API_KEY (required for post-2020 picks), OMDB_API_KEY (optional)
 │
 ├── shows/              ← Trakt-based collaborative filtering for TV shows
 │   ├── src/
@@ -80,21 +81,27 @@ pip install -r requirements_app.txt
 **Export your IMDb ratings:**
 Go to your IMDb profile → Lists → Your Ratings → Export. Place the CSV at `films/my_ratings.csv`.
 
-**Optional — real IMDb ratings via OMDb:**
-Create `films/.env`:
+**Create `films/.env`:**
 ```
-OMDB_API_KEY=your_key_here
+TMDB_API_KEY=your_key_here      # required for post-2020 picks and runtime/vote data
+OMDB_API_KEY=your_key_here      # optional — TMDB is used instead when present
 ```
-Free keys at omdbapi.com (1,000 req/day). Without a key, the system uses a MovieLens proxy — works fine.
+Free TMDB key: themoviedb.org/settings/api. Free OMDb key: omdbapi.com (1,000 req/day, not needed when TMDB is set).
 
-**Run the pipeline once (~15–25 min total):**
+**Run the pipeline once (~20–40 min total):**
 ```bash
 cd films
-python src/ingest.py    # download + preprocess MovieLens 25M (~5–15 min)
-python src/match.py     # find your 200 nearest neighbours (~2–10 min)
+python src/ingest.py       # download + preprocess ml-32m (~5–15 min), then TMDB enrichment (~35 min)
+python src/match.py        # find your 200 nearest neighbours (~2–10 min)
+python src/tmdb_recent.py  # fetch post-2020 candidates from TMDB (~2 min)
 ```
 
-Both steps are idempotent — re-running skips work already done. After setup, recommendations run in seconds.
+All three steps are idempotent — re-running skips work already done. After setup, recommendations run in seconds.
+
+**Refresh post-2020 candidates** (run monthly or after updating your ratings):
+```bash
+cd films && python src/tmdb_recent.py --force
+```
 
 ### 3. Shows system setup
 
@@ -130,9 +137,9 @@ python src/match.py     # find your 100 nearest neighbours
 
 ```bash
 cd films
-python src/recommend.py                  # 4 interactive questions then recommendations
+python src/recommend.py                  # interactive questions then recommendations
 python src/recommend.py --no-interactive # run with default settings (no filters)
-python src/recommend.py --debug          # show all 80 candidates with full scores
+python src/recommend.py --debug          # show all candidates with full scores
 ```
 
 The interactive session asks about era, famousness preference, mood, and runtime. Answers apply session-only filters — nothing is saved to disk, so each run is independent.
@@ -162,7 +169,7 @@ streamlit run app.py
 The dashboard exposes both pipelines in a single UI:
 
 - **Sidebar** — switch between Films/Shows mode, set filters, click "Get Recommendations"
-- **Tab 1 — Tonight's Picks** — Safe Bets and Wild Cards as cards with score breakdown
+- **Tab 1 — Tonight's Picks** — Safe Bets, Wild Cards, and Recent Picks (2020+) as cards with score breakdown
 - **Tab 2 — All Candidates** — Interactive scatter plot (diversity vs. taste score). Click any point to inspect it. Sortable table below.
 - **Tab 3 — Taste Profile** — Your average rating per genre for both films and shows
 
@@ -175,6 +182,24 @@ streamlit run app.py
 # on phone: http://192.168.1.42:8501
 ```
 The `.streamlit/config.toml` already binds to `0.0.0.0`, so no extra flags needed.
+
+### Static GitHub Pages site
+
+For phone access away from your computer, export a static public snapshot:
+
+```bash
+# from recs/, after films/shows ingest + match are complete
+python3 scripts/export_site.py
+python3 -m http.server 8000 -d docs   # optional local preview
+```
+
+The exporter runs the fast recommendation pipelines and writes `docs/data/recs.json`.
+The static site in `docs/` shows Tonight's Picks, All Candidates, and Taste Profile
+without exposing `.env` files, raw IMDb exports, parquet files, or MovieLens/Trakt data.
+
+To publish with GitHub Pages, commit and push `docs/`, then set Pages source to
+`main` / `/docs` in the repository settings. Updates are manual: rerun the exporter,
+commit the changed `docs/data/recs.json`, and push.
 
 ### Stremio addon
 
@@ -221,7 +246,11 @@ Films rated ≥ 4.0★ (out of 5) by neighbours, or shows rated ≥ 8.0 (out of 
 diversity_score = 0.7 × weighted_neighbour_score + 0.3 × avg_rating × top_neighbour_similarity
 ```
 
-The 0.3 component rewards content championed by your *closest* neighbours, not just broadly popular ones. Top 80 films / 60 shows are passed to the scorer.
+The 0.3 component rewards content championed by your *closest* neighbours, not just broadly popular ones. Top 80 films / 60 shows are passed to the scorer, then supplemented by post-2020 films from the TMDB recent cache.
+
+### Post-2020 films (films only)
+
+Collaborative filtering is retrospective — neighbours need to have rated a film for it to appear as a candidate. For post-2020 films, `tmdb_recent.py` builds a separate pool by calling TMDB's recommendations endpoint for your top-rated films, filtering to 2020+, and scoring the results with the same taste scorer. These candidates compete in all output buckets.
 
 ### Scoring
 
@@ -232,13 +261,14 @@ The scorer applies a stack of signals to produce a final `taste_score`. All weig
 | Signal | Range | Notes |
 |---|---|---|
 | Genre score | ±20 | Per-genre points, capped |
-| Genre combinations | varies | Drama+Crime, Animation+Drama, etc. |
-| IMDb gap signal | ±12 | Detects overrated spectacle / hidden prestige gems |
+| Genre combinations | varies | Drama+Crime, Animation+Drama, Sci-Fi+Drama, etc. |
+| Neighbour consensus | up to +7 | Avg neighbour rating ≥4.5★ → +7, ≥4.2★ → +3 |
+| IMDb gap signal | ±12 | Penalises overrated spectacle; rewards underseen prestige gems |
 | Franchise penalty | −40 | Hard veto for Marvel/DC/superhero titles |
 | Sequel penalty | −10 | Applied unless genre is Drama/Crime |
 | Positive keywords | up to +15 | "psychological", "dark", "based on true story", etc. |
 | Negative keywords | up to −20 | "slapstick", "blockbuster", "feel-good", etc. |
-| Era bonus | ±2–5 | Boosts classics or recent depending on session era filter |
+| Era bonus | ±2–5 | Boosts classics (1950–75: +5, 1976–99: +3) and recent (2020+: +2) |
 | Mood modifier | ±3–9 | Genre bonuses when mood filter is set |
 
 **Shows scorer signals:**
@@ -248,21 +278,22 @@ The scorer applies a stack of signals to produce a final `taste_score`. All weig
 | Genre score | ±18 | Per-genre points, capped |
 | Genre combinations | varies | Crime+Drama, Drama+History, etc. |
 | Community rating | ±8 | Trakt ≥8.5 → +6, <6.5 → −8 |
-| Neighbour consensus | up to +7 | Avg neighbour rating ≥8.5 → +7 |
+| Neighbour consensus | up to +7 | Avg neighbour rating ≥8.5 → +7, ≥8.0 → +3 |
 | Show status | ±4 | Ended/cancelled → +4 (complete story) |
 | Episode count | ±3 | 6–60 eps sweet spot → +3, >150 → −3 |
+| Era bonus | +2 | 2020+ shows get a small boost |
 | Positive keywords | up to +6 | "psychological", "based on true story", etc. |
 | Negative keywords | up to −15 | "sitcom", "marvel", etc. |
 | Mood modifier | ±5–8 | Applied when mood filter is set |
 
 **Classification thresholds:**
 
-| | Safe Bet | Wild Card |
-|---|---|---|
-| Films | ≥ 45 | ≥ 28 |
-| Shows | ≥ 38 | ≥ 24 |
+| | Safe Bet | Wild Card | Fallback Safe Bet |
+|---|---|---|---|
+| Films | ≥ 30 | ≥ 15 | ≥ 20 |
+| Shows | ≥ 38 | ≥ 24 | ≥ 30 |
 
-If fewer than 2 safe bets are found, the fallback threshold drops to 38 (films) / 30 (shows).
+Output diversity: if all top-3 safe bets share the same primary genre combo (e.g. all Drama+Crime), the lowest-scoring one is swapped for the best candidate with a different genre combination.
 
 ---
 
@@ -270,7 +301,9 @@ If fewer than 2 safe bets are found, the fallback threshold drops to 38 (films) 
 
 **Films:** Replace `films/my_ratings.csv` with a fresh IMDb export, then re-run:
 ```bash
-cd films && python src/match.py
+cd films
+python src/match.py
+python src/tmdb_recent.py --force   # refresh post-2020 pool with new seed films
 ```
 
 **Shows:** Edit `MY_TV_RATINGS` in `shows/src/match.py`, then re-run:
@@ -309,4 +342,4 @@ Outputs `films/my_ratings.csv` and a TV ratings file.
 
 F. Maxwell Harper and Joseph A. Konstan. 2015. The MovieLens Datasets: History and Context. ACM Transactions on Interactive Intelligent Systems (TiiS) 5, 4: 1–19.
 
-If the automatic MovieLens download fails, get `ml-25m.zip` from grouplens.org/datasets/movielens/25m/, extract so that `films/data/ml-25m/ratings.csv` exists, then run `ingest.py`.
+If the automatic MovieLens download fails, get `ml-32m.zip` from grouplens.org/datasets/movielens/, extract so that `films/data/ml-32m/ratings.csv` exists, then run `ingest.py`.

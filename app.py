@@ -79,6 +79,7 @@ if st.session_state.results is None:
         cold.setdefault("n_neighbours", 0)
         cold.setdefault("run_time_s", 0)
         cold.setdefault("session_filters", "")
+        cold.setdefault("recent_picks", [])
         cold["all_scored"] = cold.get("safe_bets", []) + cold.get("wild_cards", [])
         st.session_state.results = cold
 
@@ -104,6 +105,7 @@ with st.sidebar:
             cold.setdefault("n_neighbours", 0)
             cold.setdefault("run_time_s", 0)
             cold.setdefault("session_filters", "")
+            cold.setdefault("recent_picks", [])
             cold["all_scored"] = cold.get("safe_bets", []) + cold.get("wild_cards", [])
             st.session_state.results = cold
 
@@ -113,6 +115,7 @@ with st.sidebar:
     if mode_key == "films":
         era_opts = ["All", "Classic 1950–75", "Golden 1976–99", "Post-2000", "Recent 2010+"]
         era_sel = st.selectbox("Era", era_opts, key="films_era")
+        st.caption("Post-2020 films aren't in MovieLens — see Recent Picks below.")
 
         fame_opts = ["No filter", "<500k votes", "<200k (hidden gems)"]
         fame_sel = st.selectbox("Famousness", fame_opts, key="films_fame")
@@ -124,7 +127,7 @@ with st.sidebar:
         runtime_sel = st.selectbox("Runtime", runtime_opts, key="films_runtime")
 
     else:  # shows
-        era_opts_s = ["All", "Recent 2015+", "Post-2000"]
+        era_opts_s = ["All", "Post-2020", "Recent 2015+", "Post-2000"]
         era_sel_s = st.selectbox("Era", era_opts_s, key="shows_era")
 
         status_opts = ["Any", "Finished only", "Ongoing only"]
@@ -195,7 +198,9 @@ def _build_films_prefs() -> FilmsPrefs:
 def _build_shows_prefs() -> ShowsPrefs:
     prefs = ShowsPrefs()
     era = st.session_state.get("shows_era", "All")
-    if era == "Recent 2015+":
+    if era == "Post-2020":
+        prefs.era_min_year = 2020
+    elif era == "Recent 2015+":
         prefs.era_min_year = 2015
     elif era == "Post-2000":
         prefs.era_min_year = 2000
@@ -287,6 +292,20 @@ with tab1:
                     mode=current_mode,
                     key_prefix=f"wc_{i}",
                 )
+
+        recent_picks = results.get("recent_picks", [])
+        if recent_picks:
+            shown_titles = {x["title"] for x in safe_bets + wild_cards}
+            new_recent = [x for x in recent_picks if x["title"] not in shown_titles]
+            if new_recent:
+                st.markdown("### ◈ Recent Picks (2020+)")
+                for i, item in enumerate(new_recent):
+                    recommendation_card(
+                        item,
+                        n_neighbours,
+                        mode=current_mode,
+                        key_prefix=f"rp_{i}",
+                    )
 
 
 # ── Tab 2: All Candidates ──────────────────────────────────────────────────────

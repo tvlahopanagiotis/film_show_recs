@@ -1,20 +1,28 @@
 """
-Download and preprocess the MovieLens 25M dataset.
+Download and preprocess the MovieLens ml-32m dataset.
 Run once: python src/ingest.py
 """
 
 import os
+import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
 import requests
+from dotenv import load_dotenv
 from tqdm import tqdm
 
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 DATA_DIR = Path(__file__).parent.parent / "data"
-ML_URL = "https://files.grouplens.org/datasets/movielens/ml-25m.zip"
-ML_DIR = DATA_DIR / "ml-25m"
+# ml-32m lives at the repo root (one level above films/).
+# Stable benchmark, collected Oct 2023 — covers 7k+ post-2020 films.
+# Alternatives: "movielense-latest" (development, ~same coverage) or "ml-25m" (frozen at 2019).
+ML_DIR = DATA_DIR / "ml-32m"
+ML_URL = "https://files.grouplens.org/datasets/movielens/ml-32m.zip"
 
 PROCESSED_RATINGS = DATA_DIR / "processed_ratings.parquet"
 MOVIES_META = DATA_DIR / "movies_meta.parquet"
@@ -24,14 +32,15 @@ TMDB_ENRICHED = DATA_DIR / "tmdb_enriched.parquet"
 
 MIN_USER_RATINGS = 50
 MIN_MOVIE_RATINGS = 50
+TMDB_WORKERS = 8  # concurrent threads — comfortably within TMDB's 40 req/s limit
 
 
 def download_movielens():
     if ML_DIR.exists() and (ML_DIR / "ratings.csv").exists():
-        print("MovieLens data already exists, skipping download.")
+        print(f"MovieLens data already exists at {ML_DIR}, skipping download.")
         return
 
-    print(f"Downloading MovieLens 25M from {ML_URL} ...")
+    print(f"Downloading ml-latest from {ML_URL} ...")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -39,12 +48,12 @@ def download_movielens():
         response.raise_for_status()
     except requests.RequestException as e:
         print(f"\nDownload failed: {e}")
-        print("Try downloading manually from https://grouplens.org/datasets/movielens/25m/")
-        print(f"Extract ml-25m.zip so that {ML_DIR}/ratings.csv exists.")
+        print("Try downloading manually from https://grouplens.org/datasets/movielens/latest/")
+        print(f"Extract so that {ML_DIR}/ratings.csv exists.")
         raise SystemExit(1)
 
     total = int(response.headers.get("content-length", 0))
-    zip_path = DATA_DIR / "ml-25m.zip"
+    zip_path = DATA_DIR / "ml-32m.zip"
 
     with open(zip_path, "wb") as f, tqdm(
         desc="Downloading", total=total, unit="B", unit_scale=True
@@ -230,12 +239,9 @@ def _compute_ml_proxy(output_path: Path) -> pd.DataFrame:
 
 def enrich_from_tmdb(movies_meta_df: pd.DataFrame) -> pd.DataFrame:
     """
-    For each film with a tmdbId, fetch from TMDB:
-      - runtime (minutes)
-      - tmdb_vote_count
-      - imdb_rating (TMDB vote_average, 1–10 scale — more accurate than ML proxy)
+    For each film with a tmdbId, fetch runtime, vote_count, and vote_average from TMDB.
     Caches to data/tmdb_enriched.parquet — only runs once.
-    TMDB rate limit: 40 req/s; 0.05s sleep keeps us safe.
+    Uses TMDB_WORKERS concurrent threads to saturate TMDB's 40 req/s limit.
     """
     if TMDB_ENRICHED.exists():
         print("TMDB enrichment already cached, skipping.")
@@ -248,31 +254,50 @@ def enrich_from_tmdb(movies_meta_df: pd.DataFrame) -> pd.DataFrame:
 
     valid = movies_meta_df[movies_meta_df["tmdbId"].notna()].copy()
     valid["tmdbId"] = valid["tmdbId"].astype(int)
-    print(f"Fetching TMDB data for {len(valid):,} films (~{len(valid)*0.05/60:.0f} mins)...")
+    eta_min = len(valid) / 35 / 60
+    print(f"Fetching TMDB data for {len(valid):,} films with {TMDB_WORKERS} workers (~{eta_min:.0f} mins)...")
 
-    results = []
-    for _, row in tqdm(valid.iterrows(), total=len(valid), desc="TMDB"):
+    _thread_local = threading.local()
+
+    def _session() -> requests.Session:
+        if not hasattr(_thread_local, "session"):
+            _thread_local.session = requests.Session()
+        return _thread_local.session
+
+    def _fetch_one(row_dict: dict) -> dict:
         enriched = {
-            "movieId": row["movieId"],
+            "movieId": row_dict["movieId"],
             "runtime": None,
             "tmdb_vote_count": None,
             "imdb_rating": None,
         }
-        try:
-            r = requests.get(
-                f"https://api.themoviedb.org/3/movie/{int(row['tmdbId'])}",
-                params={"api_key": api_key},
-                timeout=5,
-            )
-            if r.ok:
-                data = r.json()
-                enriched["runtime"] = data.get("runtime") or None
-                enriched["tmdb_vote_count"] = data.get("vote_count") or None
-                enriched["imdb_rating"] = data.get("vote_average") or None
-        except Exception:
-            pass
-        results.append(enriched)
-        time.sleep(0.05)
+        for attempt in range(4):
+            try:
+                r = _session().get(
+                    f"https://api.themoviedb.org/3/movie/{row_dict['tmdbId']}",
+                    params={"api_key": api_key},
+                    timeout=10,
+                )
+                if r.status_code == 429:
+                    time.sleep(2 ** attempt)
+                    continue
+                if r.ok:
+                    data = r.json()
+                    enriched["runtime"] = data.get("runtime") or None
+                    enriched["tmdb_vote_count"] = data.get("vote_count") or None
+                    enriched["imdb_rating"] = data.get("vote_average") or None
+            except Exception:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            break
+        return enriched
+
+    rows = valid.to_dict("records")
+    results = []
+    with ThreadPoolExecutor(max_workers=TMDB_WORKERS) as executor:
+        futures = {executor.submit(_fetch_one, row): row for row in rows}
+        for future in tqdm(as_completed(futures), total=len(rows), desc="TMDB", unit="film"):
+            results.append(future.result())
 
     df = pd.DataFrame(results)
     df.to_parquet(TMDB_ENRICHED, index=False)
@@ -285,23 +310,35 @@ def enrich_from_tmdb(movies_meta_df: pd.DataFrame) -> pd.DataFrame:
 
 def fetch_imdb_ratings() -> pd.DataFrame:
     """
-    Fetch or compute IMDb ratings for all MovieLens films.
+    Fetch or compute initial IMDb-proxy ratings.
 
-    Uses OMDb API if OMDB_API_KEY is set in environment; otherwise falls back
-    to a MovieLens-average proxy (no API key required).
+    Priority logic:
+    - If TMDB_API_KEY is set: use the fast ML proxy here; enrich_from_tmdb() will
+      run afterwards and override imdb_rating with real TMDB vote_averages anyway,
+      making OMDb calls redundant and avoiding the 1000 req/day free-tier limit.
+    - If only OMDB_API_KEY is set: fetch from OMDb, scoped to filtered films only.
+    - Otherwise: ML proxy.
     """
     if IMDB_RATINGS.exists():
         print("IMDb ratings already fetched, skipping.")
         return pd.read_parquet(IMDB_RATINGS)
 
-    movies_meta = pd.read_parquet(MOVIES_META)
+    tmdb_key = os.getenv("TMDB_API_KEY", "").strip()
     omdb_key = os.getenv("OMDB_API_KEY", "").strip()
 
-    if omdb_key:
-        return _fetch_from_omdb(movies_meta, omdb_key, IMDB_RATINGS)
-    else:
-        print("No OMDB_API_KEY found — using MovieLens vote average as IMDb rating proxy.")
+    if tmdb_key:
+        print("TMDB_API_KEY present — skipping OMDb (TMDB enrichment will override ratings anyway).")
         return _compute_ml_proxy(IMDB_RATINGS)
+
+    movies_meta = pd.read_parquet(MOVIES_META)
+    if omdb_key:
+        processed_ids = pd.read_parquet(PROCESSED_RATINGS, columns=["movieId"])["movieId"].unique()
+        filtered_meta = movies_meta[movies_meta["movieId"].isin(processed_ids)]
+        print(f"  Scoping OMDb fetch to {len(filtered_meta):,} filtered films (not all {len(movies_meta):,})")
+        return _fetch_from_omdb(filtered_meta, omdb_key, IMDB_RATINGS)
+
+    print("No API key found — using MovieLens vote average as IMDb rating proxy.")
+    return _compute_ml_proxy(IMDB_RATINGS)
 
 
 if __name__ == "__main__":

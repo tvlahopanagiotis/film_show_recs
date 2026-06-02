@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recommendations</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Recommendations</h1>
+        <p id="exportMeta">Loading latest export...</p>
+      </div>
+      <div class="mode-switch" role="tablist" aria-label="Recommendation mode">
+        <button class="mode-button active" data-mode="films" type="button">Films</button>
+        <button class="mode-button" data-mode="shows" type="button">Shows</button>
+      </div>
+      <label class="variant-control">
+        <span>Category</span>
+        <select id="variantSelect" aria-label="Recommendation category">
+          <option value="all">All</option>
+          <option value="post_2020">Post-2020</option>
+        </select>
+      </label>
+    </header>
+
+    <main>
+      <section id="status" class="status hidden"></section>
+
+      <nav class="tabs" aria-label="Views">
+        <button class="tab active" data-tab="picks" type="button">Tonight's Picks</button>
+        <button class="tab" data-tab="candidates" type="button">All Candidates</button>
+        <button class="tab" data-tab="taste" type="button">Taste Profile</button>
+      </nav>
+
+      <section id="picks" class="panel active">
+        <div class="section-head">
+          <div>
+            <h2>Safe Bets</h2>
+            <p>Highest-confidence matches from similar users.</p>
+          </div>
+          <span id="runMeta" class="pill"></span>
+        </div>
+        <div id="safeBets" class="card-grid"></div>
+
+        <div class="section-head compact">
+          <div>
+            <h2>Wild Cards</h2>
+            <p>Lower confidence picks with useful upside.</p>
+          </div>
+        </div>
+        <div id="wildCards" class="card-grid"></div>
+
+        <div id="recentPicksSection" class="section-head compact hidden">
+          <div>
+            <h2>Recent Picks (2020+)</h2>
+            <p>Discovered via TMDB recommendations — not in neighbour data yet.</p>
+          </div>
+        </div>
+        <div id="recentPicks" class="card-grid"></div>
+      </section>
+
+      <section id="candidates" class="panel">
+        <div class="controls">
+          <input id="search" type="search" placeholder="Search title or genre">
+          <select id="categoryFilter" aria-label="Category">
+            <option value="all">All categories</option>
+            <option value="safe_bet">Safe bets</option>
+            <option value="wild_card">Wild cards</option>
+            <option value="skip">Skipped</option>
+          </select>
+          <select id="sortBy" aria-label="Sort">
+            <option value="taste_score">Taste score</option>
+            <option value="diversity_score">Diversity score</option>
+            <option value="recommended_by">Neighbour count</option>
+            <option value="year">Year</option>
+          </select>
+        </div>
+        <div id="scatter" class="scatter" aria-label="Candidate scatter plot"></div>
+        <div id="candidateTable" class="table-wrap"></div>
+      </section>
+
+      <section id="taste" class="panel">
+        <div class="section-head">
+          <div>
+            <h2>Taste Profile</h2>
+            <p>Average personal rating by genre, exported from local data.</p>
+          </div>
+        </div>
+        <div id="tasteChart" class="bar-chart"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

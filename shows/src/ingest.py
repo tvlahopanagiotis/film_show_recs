@@ -48,6 +48,16 @@ SEED_SLUGS = [
     "money-heist",
     "squid-game",
     "house-of-cards-2013",
+    "mad-men",
+    "rome",
+    "black-mirror",
+    "bojack-horseman",
+    "the-last-dance",
+    "game-of-thrones",
+    "killing-eve",
+    "silicon-valley",
+    "ted-lasso",
+    "death-note",
 ]
 
 MIN_SEED_OVERLAP = 4   # user must have rated at least this many seed shows

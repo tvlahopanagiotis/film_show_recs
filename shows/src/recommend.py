@@ -46,13 +46,16 @@ def get_session_preferences():
 
     # ── Question 1: Era ──────────────────────────────────────────────────────
     print("1. Any era preference?")
-    print("   [1] Recent only (2015+)")
-    print("   [2] Post-2000 only")
-    print("   [3] No preference")
+    print("   [1] Post-2020 only")
+    print("   [2] Recent only (2015+)")
+    print("   [3] Post-2000 only")
+    print("   [4] No preference")
     era_input = input("   → ").strip()
     if era_input == "1":
-        prefs.era_min_year = 2015
+        prefs.era_min_year = 2020
     elif era_input == "2":
+        prefs.era_min_year = 2015
+    elif era_input == "3":
         prefs.era_min_year = 2000
 
     # ── Question 2: Status ───────────────────────────────────────────────────
@@ -150,9 +153,24 @@ def fmt_status(status: str, aired_episodes) -> str:
     return status_str
 
 
+def _print_show_entry(show: dict, n_neighbours: int):
+    year_str = f" ({fmt_year(show['year'])})" if fmt_year(show["year"]) else ""
+    print(f"  {show['title']}{year_str} — {fmt_genres(show['genres'])}")
+    print(f"  {fmt_status(show['status'], show['aired_episodes'])}")
+    print(
+        f"  Taste score: {show['taste_score']:.0f}/100  |  "
+        f"Recommended by {show['recommended_by']}/{n_neighbours} neighbours "
+        f"(avg {show['neighbour_score']:.1f}★)"
+    )
+    for reason in show["reasons"]:
+        print(f"    ↳ {reason}")
+    print()
+
+
 def print_recommendations(results: dict, n_neighbours: int, run_time: float, prefs):
     safe_bets = results["safe_bets"]
     wild_cards = results["wild_cards"]
+    recent_picks = results.get("recent_picks", [])
     today = date.today().isoformat()
 
     width = 50
@@ -168,36 +186,21 @@ def print_recommendations(results: dict, n_neighbours: int, run_time: float, pre
     if safe_bets:
         print("\n✓ SAFE BETS\n")
         for show in safe_bets:
-            year_str = f" ({fmt_year(show['year'])})" if fmt_year(show["year"]) else ""
-            print(f"  {show['title']}{year_str} — {fmt_genres(show['genres'])}")
-            print(f"  {fmt_status(show['status'], show['aired_episodes'])}")
-            print(
-                f"  Taste score: {show['taste_score']:.0f}/100  |  "
-                f"Recommended by {show['recommended_by']}/{n_neighbours} neighbours "
-                f"(avg {show['neighbour_score']:.1f}★)"
-            )
-            for reason in show["reasons"]:
-                print(f"    ↳ {reason}")
-            print()
+            _print_show_entry(show, n_neighbours)
     else:
         print("\n  No safe bets found — try relaxing filters or lowering SAFE_BET_THRESHOLD in scorer.py")
 
     if wild_cards:
         print("◆ WILD CARDS\n")
         for show in wild_cards:
-            year_str = f" ({fmt_year(show['year'])})" if fmt_year(show["year"]) else ""
-            print(f"  {show['title']}{year_str} — {fmt_genres(show['genres'])}")
-            print(f"  {fmt_status(show['status'], show['aired_episodes'])}")
-            print(
-                f"  Taste score: {show['taste_score']:.0f}/100  |  "
-                f"Recommended by {show['recommended_by']}/{n_neighbours} neighbours "
-                f"(avg {show['neighbour_score']:.1f}★)"
-            )
-            for reason in show["reasons"]:
-                print(f"    ↳ {reason}")
-            print()
+            _print_show_entry(show, n_neighbours)
     else:
         print("  No wild cards found.\n")
+
+    if recent_picks:
+        print("◈ RECENT PICKS (2020+)\n")
+        for show in recent_picks:
+            _print_show_entry(show, n_neighbours)
 
     print(line)
     print(f"  {n_neighbours} neighbours · Trakt.tv · Run time: {run_time:.1f}s")
@@ -237,6 +240,7 @@ def save_json(results: dict, n_neighbours: int, run_time: float, prefs):
         "session_filters": fmt_active_filters(prefs) or "none",
         "safe_bets": results["safe_bets"],
         "wild_cards": results["wild_cards"],
+        "recent_picks": results.get("recent_picks", []),
     }
     with open(output_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)

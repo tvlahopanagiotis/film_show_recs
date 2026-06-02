@@ -16,7 +16,13 @@ MOVIE_TAGS = DATA_DIR / "movie_tags.parquet"
 MY_NEIGHBOURS = DATA_DIR / "my_neighbours.parquet"
 IMDB_RATINGS = DATA_DIR / "imdb_ratings.parquet"
 TMDB_ENRICHED = DATA_DIR / "tmdb_enriched.parquet"
+TMDB_RECENT = DATA_DIR / "tmdb_recent_candidates.parquet"
 CANDIDATES_OUT = DATA_DIR / "candidates.parquet"
+
+# ml-32m covers up to Oct 2023, but post-2020 films have very few neighbour ratings
+# (collaborative filtering is retrospective — neighbours haven't rated recent films yet).
+# Era filters above this year fall back gracefully; post-2020 is handled by TMDB discovery.
+DATASET_MAX_YEAR = 2019
 
 # Minimum number of neighbours who must have rated a film 4.0+ for it to qualify
 MIN_RECOMMENDER_COUNT = 5
@@ -118,6 +124,50 @@ def _top_20_mean(sims: list) -> float:
     sorted_sims = sorted(sims, reverse=True)
     top_n = max(1, len(sorted_sims) // 5)
     return sum(sorted_sims[:top_n]) / top_n
+
+
+def _load_tmdb_recent(prefs) -> pd.DataFrame:
+    """
+    Load cached TMDB recent candidates and apply session filters.
+    Returns empty DataFrame if the cache doesn't exist or the era filter
+    excludes post-2020 (e.g. user asked for classics only).
+    """
+    if not TMDB_RECENT.exists():
+        return pd.DataFrame()
+
+    # Skip if the user explicitly wants pre-2020 only
+    if prefs.era_max_year is not None and prefs.era_max_year < RECENT_FROM_YEAR:
+        return pd.DataFrame()
+
+    df = pd.read_parquet(TMDB_RECENT)
+
+    # Famousness filter (imdb_votes here = TMDB vote_count)
+    if prefs.exclude_famous and "imdb_votes" in df.columns:
+        df = df[df["imdb_votes"].isna() | (df["imdb_votes"] < prefs.famous_votes_threshold)]
+
+    # Runtime filter
+    if prefs.max_runtime is not None and "runtime" in df.columns:
+        df = df[df["runtime"].isna() | (df["runtime"] <= prefs.max_runtime)]
+
+    # Already-seen filter
+    df["title_norm"] = df["title"].fillna("").apply(norm)
+    df = df[~df["title_norm"].isin(ALREADY_SEEN)]
+
+    # Add collaborative-filtering columns with zero defaults so the scorer
+    # can process these rows without special-casing
+    df["avg_neighbour_rating"] = 0.0
+    df["recommender_count"] = 0
+    df["weighted_score"] = 0.0
+    df["top_neighbour_similarity"] = 0.0
+    df["diversity_score"] = 0.0
+    df["imdbId"] = None
+    df["movieId"] = None
+
+    return df.reset_index(drop=True)
+
+
+# Constant used by _load_tmdb_recent
+RECENT_FROM_YEAR = 2020
 
 
 def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.DataFrame:
@@ -246,9 +296,18 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
 
     # ── Session filters ───────────────────────────────────────────────────────
 
-    # Era filter
-    if prefs.era_min_year is not None:
-        agg = agg[agg["year"].isna() | (agg["year"] >= prefs.era_min_year)]
+    # Era filter — guard against requesting years beyond the dataset
+    era_min = prefs.era_min_year
+    if era_min is not None and era_min > DATASET_MAX_YEAR:
+        print(
+            f"  Note: MovieLens data only covers up to {DATASET_MAX_YEAR}. "
+            f"Post-{era_min} era filter has been ignored — use Recent Picks (2020+) "
+            f"in the output instead."
+        )
+        era_min = None
+
+    if era_min is not None:
+        agg = agg[agg["year"].isna() | (agg["year"] >= era_min)]
     if prefs.era_max_year is not None:
         agg = agg[agg["year"].isna() | (agg["year"] <= prefs.era_max_year)]
 
@@ -271,6 +330,16 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
     # Sort by diversity_score and take top N
     agg = agg.sort_values("diversity_score", ascending=False).head(TOP_N_CANDIDATES)
     agg = agg.reset_index(drop=True)
+
+    # Supplement with TMDB-discovered post-2020 films (added after the CF ranking
+    # so they don't displace collaborative candidates from the top-80 pool)
+    tmdb_recent = _load_tmdb_recent(prefs)
+    if not tmdb_recent.empty:
+        cf_norms = set(agg["title_norm"].tolist())
+        new_recent = tmdb_recent[~tmdb_recent["title_norm"].isin(cf_norms)]
+        if not new_recent.empty:
+            print(f"+ {len(new_recent)} TMDB recent candidates (post-2020, content-based)")
+            agg = pd.concat([agg, new_recent], ignore_index=True)
 
     agg.to_parquet(CANDIDATES_OUT, index=False)
     print(f"Generated {len(agg)} candidates in {time.time()-t0:.1f}s")

@@ -58,6 +58,7 @@ def get_session_preferences():
     print("   [2] Post-2010 only")
     print("   [3] Classics only (pre-1980)")
     print("   [4] No preference")
+    print("   (Note: MovieLens data ends at 2019 — post-2020 films use the Recent Picks section)")
     era_input = input("   → ").strip()
     if era_input == "1":
         prefs.era_min_year = 2000
@@ -140,9 +141,23 @@ def fmt_active_filters(prefs) -> str:
     return " · ".join(parts)
 
 
+def _print_film_entry(film: dict, n_neighbours: int):
+    year_str = f" ({fmt_year(film['year'])})" if fmt_year(film["year"]) else ""
+    print(f"  {film['title']}{year_str} — {fmt_genres(film['genres'])}")
+    print(
+        f"  Taste score: {film['taste_score']:.0f}/100  |  "
+        f"Recommended by {film['recommended_by']}/{n_neighbours} neighbours "
+        f"(avg {film['neighbour_score']:.1f}★)"
+    )
+    for reason in film["reasons"]:
+        print(f"    ↳ {reason}")
+    print()
+
+
 def print_recommendations(results: dict, n_neighbours: int, run_time: float, prefs):
     safe_bets = results["safe_bets"]
     wild_cards = results["wild_cards"]
+    recent_picks = results.get("recent_picks", [])
     today = date.today().isoformat()
 
     width = 50
@@ -158,37 +173,24 @@ def print_recommendations(results: dict, n_neighbours: int, run_time: float, pre
     if safe_bets:
         print("\n✓ SAFE BETS\n")
         for film in safe_bets:
-            year_str = f" ({fmt_year(film['year'])})" if fmt_year(film["year"]) else ""
-            print(f"  {film['title']}{year_str} — {fmt_genres(film['genres'])}")
-            print(
-                f"  Taste score: {film['taste_score']:.0f}/100  |  "
-                f"Recommended by {film['recommended_by']}/{n_neighbours} neighbours "
-                f"(avg {film['neighbour_score']:.1f}★)"
-            )
-            for reason in film["reasons"]:
-                print(f"    ↳ {reason}")
-            print()
+            _print_film_entry(film, n_neighbours)
     else:
         print("\n  No safe bets found — try lowering SAFE_BET_THRESHOLD in scorer.py")
 
     if wild_cards:
         print("◆ WILD CARDS\n")
         for film in wild_cards:
-            year_str = f" ({fmt_year(film['year'])})" if fmt_year(film["year"]) else ""
-            print(f"  {film['title']}{year_str} — {fmt_genres(film['genres'])}")
-            print(
-                f"  Taste score: {film['taste_score']:.0f}/100  |  "
-                f"Recommended by {film['recommended_by']}/{n_neighbours} neighbours "
-                f"(avg {film['neighbour_score']:.1f}★)"
-            )
-            for reason in film["reasons"]:
-                print(f"    ↳ {reason}")
-            print()
+            _print_film_entry(film, n_neighbours)
     else:
         print("  No wild cards found.\n")
 
+    if recent_picks:
+        print("◈ RECENT PICKS (2020+)\n")
+        for film in recent_picks:
+            _print_film_entry(film, n_neighbours)
+
     print(line)
-    print(f"  {n_neighbours} neighbours · MovieLens 25M · Run time: {run_time:.1f}s")
+    print(f"  {n_neighbours} neighbours · MovieLens ml-32m · Run time: {run_time:.1f}s")
     print()
     print("  Watched something? Export IMDb ratings, replace my_ratings.csv, then:")
     print("  python src/match.py")
@@ -225,6 +227,7 @@ def save_json(results: dict, n_neighbours: int, run_time: float, prefs):
         "session_filters": fmt_active_filters(prefs) or "none",
         "safe_bets": results["safe_bets"],
         "wild_cards": results["wild_cards"],
+        "recent_picks": results.get("recent_picks", []),
     }
     with open(output_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)

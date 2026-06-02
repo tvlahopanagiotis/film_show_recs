@@ -42,7 +42,7 @@ GENRE_SCORE_CAP_NEGATIVE = -15
 
 # Genre combination bonuses
 COMBO_BONUSES: list[tuple[frozenset, int, str]] = [
-    (frozenset({"Drama", "Crime"}),    11, "Drama + Crime combination (+11) — core taste sweet spot (Breaking Bad, Mindhunter)"),
+    (frozenset({"Drama", "Crime"}),     7, "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)"),
     (frozenset({"Drama", "History"}),   5, "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)"),
     (frozenset({"Animation", "Drama"}), 8, "Animation + Drama combination (+8) — thematically serious animation (BoJack, Persepolis)"),
     (frozenset({"Comedy", "Crime"}),    3, "Comedy + Crime combination (+3) — smart genre blend (Knives Out, Hot Fuzz)"),
@@ -122,7 +122,19 @@ ERA_BONUSES: list[tuple[tuple[int, int], int, str]] = [
     ((1950, 1975), 5, "Classic era 1950–1975 (+5) — Judgment at Nuremberg, Dr Strangelove"),
     ((1976, 1999), 3, "Golden era 1976–1999 (+3) — Goodfellas, Pulp Fiction, Heat"),
     ((2000, 2015), 2, "Contemporary prestige 2000–2015 (+2)"),
+    ((2020, 2099), 2, "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"),
 ]
+
+# ── Neighbour consensus ───────────────────────────────────────────────────────
+# score_film() has no access to collaborative data, so this is applied
+# in score_candidates() after the base score is computed.
+NEIGHBOUR_RATING_HIGH = 4.5          # avg neighbour rating, MovieLens 0.5–5.0 scale
+NEIGHBOUR_RATING_HIGH_BONUS = 7
+NEIGHBOUR_RATING_DECENT = 4.2
+NEIGHBOUR_RATING_DECENT_BONUS = 3
+
+# ── Recent picks ──────────────────────────────────────────────────────────────
+RECENT_ERA_MIN_YEAR = 2020
 
 # ── Classification thresholds ─────────────────────────────────────────────────
 
@@ -378,6 +390,13 @@ def classify(taste_score: float, franchise_penalty: int) -> str:
     return "skip"
 
 
+def _year_int(y) -> int:
+    try:
+        return int(y)
+    except (TypeError, ValueError):
+        return 0
+
+
 def score_candidates(candidates: pd.DataFrame, mood: str = "any") -> dict:
     """
     Score all candidates and return the final selection dict.
@@ -386,6 +405,7 @@ def score_candidates(candidates: pd.DataFrame, mood: str = "any") -> dict:
         {
             "safe_bets": [...],
             "wild_cards": [...],
+            "recent_picks": [...],   # top 2020+ films regardless of overall bucket
             "all_scored": [...],
         }
     """
@@ -400,6 +420,19 @@ def score_candidates(candidates: pd.DataFrame, mood: str = "any") -> dict:
             year=row.get("year"),
             mood=mood,
         )
+
+        # Neighbour consensus bonus — score_film() is genre/tag/IMDb only, so the
+        # collaborative signal is injected here where we have access to it.
+        avg_rating = float(row.get("avg_neighbour_rating", 0))
+        if avg_rating >= NEIGHBOUR_RATING_HIGH:
+            result["taste_score"] = min(100.0, result["taste_score"] + NEIGHBOUR_RATING_HIGH_BONUS)
+            result["reasons"].append(f"Neighbours rated it {avg_rating:.1f}★ avg (+{NEIGHBOUR_RATING_HIGH_BONUS})")
+        elif avg_rating >= NEIGHBOUR_RATING_DECENT:
+            result["taste_score"] = min(100.0, result["taste_score"] + NEIGHBOUR_RATING_DECENT_BONUS)
+            result["reasons"].append(f"Neighbours rated it {avg_rating:.1f}★ avg (+{NEIGHBOUR_RATING_DECENT_BONUS})")
+
+        result["category"] = classify(result["taste_score"], result["franchise_penalty"])
+
         scored_rows.append({
             "title": row.get("title", ""),
             "year": row.get("year"),
@@ -440,8 +473,43 @@ def score_candidates(candidates: pd.DataFrame, mood: str = "any") -> dict:
         for r in wild_cards:
             r["category"] = "wild_card"
 
+    # Diversity pass: if all top-3 safe bets share the same primary genre combo,
+    # swap the lowest-scoring one for the best candidate with a different combo.
+    def _primary_combo(item: dict) -> Optional[frozenset]:
+        genre_set = set(item.get("genres", []))
+        best = max(
+            ((combo, bonus) for combo, bonus, _ in COMBO_BONUSES if combo.issubset(genre_set)),
+            key=lambda x: x[1],
+            default=(None, 0),
+        )
+        return best[0]
+
+    if len(safe_bets) >= 3:
+        dominant = _primary_combo(safe_bets[0])
+        if dominant and all(_primary_combo(r) == dominant for r in safe_bets[:3]):
+            safe_bet_titles = {r["title"] for r in safe_bets}
+            for candidate in all_scored:
+                if (
+                    candidate["title"] not in safe_bet_titles
+                    and _primary_combo(candidate) != dominant
+                    and candidate["taste_score"] >= WILD_CARD_THRESHOLD
+                ):
+                    safe_bets[2] = candidate
+                    candidate["category"] = "safe_bet"
+                    wild_cards = [r for r in wild_cards if r["title"] != candidate["title"]]
+                    break
+
+    already_shown = {r["title"] for r in safe_bets[:3] + wild_cards[:2]}
+    recent_picks = [
+        r for r in all_scored
+        if _year_int(r.get("year")) >= RECENT_ERA_MIN_YEAR
+        and r["taste_score"] >= WILD_CARD_THRESHOLD
+        and r["title"] not in already_shown
+    ][:3]
+
     return {
         "safe_bets": safe_bets[:3],
         "wild_cards": wild_cards[:2],
+        "recent_picks": recent_picks,
         "all_scored": all_scored,
     }
