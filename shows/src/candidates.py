@@ -106,6 +106,9 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
         + agg["avg_neighbour_rating"] * agg["top_neighbour_similarity"] * 0.3
     )
 
+    # Drop rows with no title (incomplete metadata)
+    agg = agg[agg["title"].notna() & (agg["title"] != "")]
+
     # Remove already-seen
     agg["slug_norm"] = agg["slug"].fillna("").apply(norm)
     agg = agg[~agg["slug_norm"].isin(already_seen_norms)]
@@ -115,6 +118,8 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
     # Era filter
     if prefs.era_min_year is not None:
         agg = agg[agg["year"].isna() | (agg["year"] >= prefs.era_min_year)]
+    if prefs.era_max_year is not None:
+        agg = agg[agg["year"].isna() | (agg["year"] <= prefs.era_max_year)]
 
     # Status filter
     if prefs.status_filter == "ended":

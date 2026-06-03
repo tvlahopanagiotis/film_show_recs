@@ -127,10 +127,12 @@ def fmt_year(year) -> str:
 def fmt_active_filters(prefs) -> str:
     """Build a one-line summary of the active session filters."""
     parts = []
-    if prefs.era_min_year:
+    if prefs.era_min_year and prefs.era_max_year:
+        parts.append(f"Era: {prefs.era_min_year}–{prefs.era_max_year}")
+    elif prefs.era_min_year:
         parts.append(f"Era: post-{prefs.era_min_year}")
-    if prefs.era_max_year:
-        parts.append(f"Era: pre-{prefs.era_max_year}")
+    elif prefs.era_max_year:
+        parts.append(f"Era: pre-{prefs.era_max_year + 1}")
     if prefs.exclude_famous:
         threshold_k = prefs.famous_votes_threshold // 1000
         parts.append(f"Familiar titles filtered (<{threshold_k}k votes)")

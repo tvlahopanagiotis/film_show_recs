@@ -31,6 +31,7 @@ class FilmsPrefs:
 @dataclass
 class ShowsPrefs:
     era_min_year: Optional[int] = None
+    era_max_year: Optional[int] = None
     status_filter: str = "any"
     max_episodes: Optional[int] = None
     exclude_famous: bool = False
@@ -62,10 +63,17 @@ def _parse_film_genres(raw) -> list[str]:
 
 
 def _parse_show_genres(raw) -> list[str]:
+    if hasattr(raw, "tolist"):
+        raw = raw.tolist()
     if isinstance(raw, list):
         return [str(g).strip().title() for g in raw if str(g).strip()]
-    if not raw or pd.isna(raw):
+    if raw is None:
         return []
+    try:
+        if pd.isna(raw):
+            return []
+    except (TypeError, ValueError):
+        pass
     return [g.strip().title() for g in str(raw).split("|") if g.strip()]
 
 
@@ -155,6 +163,9 @@ def build_payload() -> dict:
         "variants": [
             {"key": "all", "label": "All"},
             {"key": "post_2020", "label": "Post-2020"},
+            {"key": "2000s", "label": "2000s"},
+            {"key": "90s", "label": "90s"},
+            {"key": "classic", "label": "Classic"},
         ],
         "films": {"variants": {}},
         "shows": {"variants": {}},
@@ -169,6 +180,9 @@ def build_payload() -> dict:
     film_variants = (
         ("all", "All", FilmsPrefs()),
         ("post_2020", "Post-2020", FilmsPrefs(era_min_year=2020)),
+        ("2000s", "2000s", FilmsPrefs(era_min_year=2000, era_max_year=2019)),
+        ("90s", "90s", FilmsPrefs(era_min_year=1990, era_max_year=1999)),
+        ("classic", "Classic", FilmsPrefs(era_max_year=1989)),
     )
     for key, label, prefs in film_variants:
         try:
@@ -182,6 +196,9 @@ def build_payload() -> dict:
     show_variants = (
         ("all", "All", ShowsPrefs()),
         ("post_2020", "Post-2020", ShowsPrefs(era_min_year=2020)),
+        ("2000s", "2000s", ShowsPrefs(era_min_year=2000, era_max_year=2019)),
+        ("90s", "90s", ShowsPrefs(era_min_year=1990, era_max_year=1999)),
+        ("classic", "Classic", ShowsPrefs(era_max_year=1989)),
     )
     for key, label, prefs in show_variants:
         try:

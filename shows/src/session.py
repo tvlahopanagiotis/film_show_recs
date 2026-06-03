@@ -9,6 +9,7 @@ from typing import Optional
 @dataclass
 class SessionPrefs:
     era_min_year: Optional[int] = None       # None = no filter
+    era_max_year: Optional[int] = None       # None = no filter
     status_filter: str = "any"               # "ended", "ongoing", "any"
     max_episodes: Optional[int] = None       # total aired episodes; None = no filter
     exclude_famous: bool = False             # exclude shows above famous_votes_threshold

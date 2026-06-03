@@ -42,6 +42,7 @@ class FilmsPrefs:
 @dataclass
 class ShowsPrefs:
     era_min_year: Optional[int] = None
+    era_max_year: Optional[int] = None
     status_filter: str = "any"
     max_episodes: Optional[int] = None
     exclude_famous: bool = False
