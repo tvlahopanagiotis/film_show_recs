@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "exported_at": "2026-06-07T10:36:01+03:00",
+  "exported_at": "2026-06-07T10:54:38+03:00",
   "source": "local export",
   "variants": [
     {
@@ -37,7 +37,7 @@
         "label": "All",
         "date": "2026-06-07",
         "n_neighbours": 200,
-        "run_time_s": 0.29,
+        "run_time_s": 0.25,
         "session_filters": "none",
         "safe_bets": [
           {
@@ -90,28 +90,30 @@
             "diversity_score": 0.0
           },
           {
-            "title": "Killers of the Flower Moon",
-            "year": 2023,
+            "title": "Lone Star (1996)",
+            "year": 1996,
             "genres": [
-              "Crime",
-              "History",
-              "Drama"
+              "Drama",
+              "Mystery",
+              "Western"
             ],
-            "imdbId": null,
-            "taste_score": 42.0,
+            "imdbId": 116905,
+            "taste_score": 38.0,
             "category": "safe_bet",
             "reasons": [
-              "Genre profile (+20): History, Drama, Crime",
-              "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.4 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
+              "Genre profile (+12): Drama, Mystery",
+              "IMDb 7.0 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
+              "Dark tag (+3)",
+              "Tension tag (+3)",
+              "Nonlinear tag (+2)",
+              "Golden era 1976–1999 (+3) — Goodfellas, Pulp Fiction, Heat",
+              "Neighbours rated it 4.5★ avg (+7)"
             ],
             "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
+            "neighbour_score": 4.52,
+            "recommended_by": 23,
+            "weighted_score": 74.99,
+            "diversity_score": 53.5996
           }
         ],
         "wild_cards": [
@@ -281,30 +283,6 @@
               "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
               "Animation + Drama combination (+8) — thematically serious animation (BoJack, Persepolis)",
               "IMDb 8.1 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
-            "title": "Killers of the Flower Moon",
-            "year": 2023,
-            "genres": [
-              "Crime",
-              "History",
-              "Drama"
-            ],
-            "imdbId": null,
-            "taste_score": 42.0,
-            "category": "safe_bet",
-            "reasons": [
-              "Genre profile (+20): History, Drama, Crime",
-              "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.4 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
             ],
             "franchise_penalty": 0,
@@ -926,28 +904,6 @@
               "Genre profile (+16): History, Drama",
               "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
               "IMDb 7.0 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
-            "title": "Nuremberg",
-            "year": 2025,
-            "genres": [
-              "History",
-              "Drama"
-            ],
-            "imdbId": null,
-            "taste_score": 31.0,
-            "category": "safe_bet",
-            "reasons": [
-              "Genre profile (+16): History, Drama",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.5 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
             ],
             "franchise_penalty": 0,
@@ -7325,26 +7281,6 @@
             "diversity_score": 0.0
           },
           {
-            "title": "Nosferatu",
-            "year": 2024,
-            "genres": [
-              "Horror",
-              "Fantasy"
-            ],
-            "imdbId": null,
-            "taste_score": 0.0,
-            "category": "skip",
-            "reasons": [
-              "Genre profile (-7): Horror, Fantasy",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
             "title": "The Deliverance",
             "year": 2024,
             "genres": [
@@ -8327,27 +8263,6 @@
             "recommended_by": 0,
             "weighted_score": 0.0,
             "diversity_score": 0.0
-          },
-          {
-            "title": "Project Hail Mary",
-            "year": 2026,
-            "genres": [
-              "Sci-Fi",
-              "Adventure"
-            ],
-            "imdbId": null,
-            "taste_score": 0.0,
-            "category": "skip",
-            "reasons": [
-              "Genre profile (-6): Sci-Fi",
-              "High IMDb (8.6) on spectacle genre (-12) — Revenant/Mad Max pattern",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
           }
         ],
         "taste_profile": {
@@ -8384,7 +8299,7 @@
         "label": "Post-2020",
         "date": "2026-06-07",
         "n_neighbours": 200,
-        "run_time_s": 1.18,
+        "run_time_s": 1.16,
         "session_filters": "Era: post-2020",
         "safe_bets": [
           {
@@ -8555,30 +8470,6 @@
             "diversity_score": 0.0
           },
           {
-            "title": "Killers of the Flower Moon",
-            "year": 2023,
-            "genres": [
-              "Crime",
-              "History",
-              "Drama"
-            ],
-            "imdbId": null,
-            "taste_score": 42.0,
-            "category": "safe_bet",
-            "reasons": [
-              "Genre profile (+20): History, Drama, Crime",
-              "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.4 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
             "title": "Kensuke's Kingdom",
             "year": 2024,
             "genres": [
@@ -8594,6 +8485,30 @@
               "Genre profile (+20): Animation, Drama",
               "Animation + Drama combination (+8) — thematically serious animation (BoJack, Persepolis)",
               "IMDb 7.2 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
+              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
+            ],
+            "franchise_penalty": 0,
+            "neighbour_score": 0.0,
+            "recommended_by": 0,
+            "weighted_score": 0.0,
+            "diversity_score": 0.0
+          },
+          {
+            "title": "It Was Just an Accident",
+            "year": 2025,
+            "genres": [
+              "Drama",
+              "Thriller",
+              "Crime",
+              "Mystery"
+            ],
+            "imdbId": null,
+            "taste_score": 37.0,
+            "category": "safe_bet",
+            "reasons": [
+              "Genre profile (+20): Drama, Crime, Mystery",
+              "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)",
+              "IMDb 7.1 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
             ],
             "franchise_penalty": 0,
@@ -8708,30 +8623,6 @@
               "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
               "Animation + Drama combination (+8) — thematically serious animation (BoJack, Persepolis)",
               "IMDb 8.1 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
-            "title": "Killers of the Flower Moon",
-            "year": 2023,
-            "genres": [
-              "Crime",
-              "History",
-              "Drama"
-            ],
-            "imdbId": null,
-            "taste_score": 42.0,
-            "category": "safe_bet",
-            "reasons": [
-              "Genre profile (+20): History, Drama, Crime",
-              "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.4 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
             ],
             "franchise_penalty": 0,
@@ -9535,28 +9426,6 @@
               "Genre profile (+16): History, Drama",
               "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
               "IMDb 7.0 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
-            "title": "Nuremberg",
-            "year": 2025,
-            "genres": [
-              "History",
-              "Drama"
-            ],
-            "imdbId": null,
-            "taste_score": 31.0,
-            "category": "safe_bet",
-            "reasons": [
-              "Genre profile (+16): History, Drama",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.5 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
             ],
             "franchise_penalty": 0,
@@ -15908,26 +15777,6 @@
             "diversity_score": 0.0
           },
           {
-            "title": "Nosferatu",
-            "year": 2024,
-            "genres": [
-              "Horror",
-              "Fantasy"
-            ],
-            "imdbId": null,
-            "taste_score": 0.0,
-            "category": "skip",
-            "reasons": [
-              "Genre profile (-7): Horror, Fantasy",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
             "title": "The Deliverance",
             "year": 2024,
             "genres": [
@@ -16910,27 +16759,6 @@
             "recommended_by": 0,
             "weighted_score": 0.0,
             "diversity_score": 0.0
-          },
-          {
-            "title": "Project Hail Mary",
-            "year": 2026,
-            "genres": [
-              "Sci-Fi",
-              "Adventure"
-            ],
-            "imdbId": null,
-            "taste_score": 0.0,
-            "category": "skip",
-            "reasons": [
-              "Genre profile (-6): Sci-Fi",
-              "High IMDb (8.6) on spectacle genre (-12) — Revenant/Mad Max pattern",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
           }
         ],
         "taste_profile": {
@@ -16967,7 +16795,7 @@
         "label": "Post-2010",
         "date": "2026-06-07",
         "n_neighbours": 200,
-        "run_time_s": 8.0,
+        "run_time_s": 7.89,
         "session_filters": "Era: post-2010",
         "safe_bets": [
           {
@@ -17020,28 +16848,28 @@
             "diversity_score": 0.0
           },
           {
-            "title": "Killers of the Flower Moon",
-            "year": 2023,
+            "title": "End of Watch (2012)",
+            "year": 2012,
             "genres": [
               "Crime",
-              "History",
-              "Drama"
+              "Drama",
+              "Thriller"
             ],
-            "imdbId": null,
-            "taste_score": 42.0,
+            "imdbId": 1855199,
+            "taste_score": 40.0,
             "category": "safe_bet",
             "reasons": [
-              "Genre profile (+20): History, Drama, Crime",
+              "Genre profile (+16): Drama, Crime, Thriller",
               "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
               "IMDb 7.4 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
+              "Contemporary prestige 2000–2015 (+2)",
+              "Neighbours rated it 4.5★ avg (+7)"
             ],
             "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
+            "neighbour_score": 4.5,
+            "recommended_by": 3,
+            "weighted_score": 9.65,
+            "diversity_score": 7.7995
           }
         ],
         "wild_cards": [
@@ -17209,30 +17037,6 @@
               "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
               "Animation + Drama combination (+8) — thematically serious animation (BoJack, Persepolis)",
               "IMDb 8.1 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
-            "title": "Killers of the Flower Moon",
-            "year": 2023,
-            "genres": [
-              "Crime",
-              "History",
-              "Drama"
-            ],
-            "imdbId": null,
-            "taste_score": 42.0,
-            "category": "safe_bet",
-            "reasons": [
-              "Genre profile (+20): History, Drama, Crime",
-              "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.4 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
             ],
             "franchise_penalty": 0,
@@ -17848,28 +17652,6 @@
               "Genre profile (+16): History, Drama",
               "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
               "IMDb 7.0 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
-            "title": "Nuremberg",
-            "year": 2025,
-            "genres": [
-              "History",
-              "Drama"
-            ],
-            "imdbId": null,
-            "taste_score": 31.0,
-            "category": "safe_bet",
-            "reasons": [
-              "Genre profile (+16): History, Drama",
-              "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)",
-              "IMDb 7.5 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
             ],
             "franchise_penalty": 0,
@@ -23775,26 +23557,6 @@
             "diversity_score": 0.0
           },
           {
-            "title": "Nosferatu",
-            "year": 2024,
-            "genres": [
-              "Horror",
-              "Fantasy"
-            ],
-            "imdbId": null,
-            "taste_score": 0.0,
-            "category": "skip",
-            "reasons": [
-              "Genre profile (-7): Horror, Fantasy",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
-          },
-          {
             "title": "The Deliverance",
             "year": 2024,
             "genres": [
@@ -24777,27 +24539,6 @@
             "recommended_by": 0,
             "weighted_score": 0.0,
             "diversity_score": 0.0
-          },
-          {
-            "title": "Project Hail Mary",
-            "year": 2026,
-            "genres": [
-              "Sci-Fi",
-              "Adventure"
-            ],
-            "imdbId": null,
-            "taste_score": 0.0,
-            "category": "skip",
-            "reasons": [
-              "Genre profile (-6): Sci-Fi",
-              "High IMDb (8.6) on spectacle genre (-12) — Revenant/Mad Max pattern",
-              "Recent era 2020+ (+2) — counteracts MovieLens data sparsity for new releases"
-            ],
-            "franchise_penalty": 0,
-            "neighbour_score": 0.0,
-            "recommended_by": 0,
-            "weighted_score": 0.0,
-            "diversity_score": 0.0
           }
         ],
         "taste_profile": {
@@ -24834,7 +24575,7 @@
         "label": "2000s",
         "date": "2026-06-07",
         "n_neighbours": 200,
-        "run_time_s": 12.25,
+        "run_time_s": 12.39,
         "session_filters": "Era: 2000–2019",
         "safe_bets": [
           {
@@ -26901,7 +26642,7 @@
         "label": "90s",
         "date": "2026-06-07",
         "n_neighbours": 200,
-        "run_time_s": 16.36,
+        "run_time_s": 16.77,
         "session_filters": "Era: 1990–1999",
         "safe_bets": [
           {
@@ -28936,7 +28677,7 @@
             "taste_score": 44.0,
             "category": "safe_bet",
             "reasons": [
-              "Genre profile (+15): War, Crime, Thriller",
+              "Genre profile (+15): Crime, War, Thriller",
               "IMDb 7.5 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Psychological tag (+5)",
               "Dark tag (+3)",
@@ -29069,7 +28810,7 @@
             "taste_score": 44.0,
             "category": "safe_bet",
             "reasons": [
-              "Genre profile (+15): War, Crime, Thriller",
+              "Genre profile (+15): Crime, War, Thriller",
               "IMDb 7.5 in prestige genre (+8) — underseen gem pattern (Apollo 13, Darkest Hour)",
               "Psychological tag (+5)",
               "Dark tag (+3)",
@@ -31170,7 +30911,7 @@
             "taste_score": 35.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.6 (+6)",
               "Neighbours rated it 8.7★ avg (+7)",
@@ -31517,7 +31258,7 @@
             "taste_score": 35.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.6 (+6)",
               "Neighbours rated it 8.7★ avg (+7)",
@@ -31864,7 +31605,7 @@
             "taste_score": 33.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.5 (+6)",
               "Complete series (+4)",
@@ -32586,7 +32327,7 @@
             "taste_score": 16.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-1)",
+              "Genre: Fantasy (-1)",
               "Trakt community rating 8.8 (+6)",
               "Complete series (+4)",
               "Neighbours rated it 9.2★ avg (+7)"
@@ -32712,7 +32453,7 @@
             "taste_score": 13.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-4)",
+              "Genre: Fantasy (-4)",
               "Trakt community rating 9.1 (+6)",
               "Complete series (+4)",
               "Neighbours rated it 9.2★ avg (+7)"
@@ -33047,7 +32788,7 @@
             "taste_score": 35.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.6 (+6)",
               "Neighbours rated it 8.7★ avg (+7)",
@@ -33105,7 +32846,7 @@
             "taste_score": 38.0,
             "category": "safe_bet",
             "reasons": [
-              "Genre: Thriller (+18)",
+              "Genre: Drama (+18)",
               "Thriller drama combination (+4)",
               "Mystery drama combination (+4)",
               "Complete series (+4)",
@@ -33279,7 +33020,7 @@
             "taste_score": 38.0,
             "category": "safe_bet",
             "reasons": [
-              "Genre: Thriller (+18)",
+              "Genre: Drama (+18)",
               "Thriller drama combination (+4)",
               "Mystery drama combination (+4)",
               "Complete series (+4)",
@@ -33339,7 +33080,7 @@
             "taste_score": 35.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.6 (+6)",
               "Neighbours rated it 8.7★ avg (+7)",
@@ -34729,7 +34470,7 @@
             "taste_score": 8.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-1)",
+              "Genre: Science-Fiction (-1)",
               "Neighbours rated it 8.4★ avg (+3)",
               "16.0 episodes — compact commitment (+3)",
               "Recent era 2023 (+2)"
@@ -34970,7 +34711,7 @@
             "taste_score": 35.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.6 (+6)",
               "Neighbours rated it 8.7★ avg (+7)",
@@ -35373,7 +35114,7 @@
             "taste_score": 35.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.6 (+6)",
               "Neighbours rated it 8.7★ avg (+7)",
@@ -35776,7 +35517,7 @@
             "taste_score": 33.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.5 (+6)",
               "Complete series (+4)",
@@ -36497,7 +36238,7 @@
             "taste_score": 16.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-1)",
+              "Genre: Fantasy (-1)",
               "Trakt community rating 8.8 (+6)",
               "Complete series (+4)",
               "Neighbours rated it 9.2★ avg (+7)"
@@ -37425,7 +37166,7 @@
             "taste_score": 33.0,
             "category": "wild_card",
             "reasons": [
-              "Genre: Mystery (+12)",
+              "Genre: Drama (+12)",
               "Mystery drama combination (+4)",
               "Trakt community rating 8.5 (+6)",
               "Complete series (+4)",
@@ -38141,7 +37882,7 @@
             "taste_score": 16.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-1)",
+              "Genre: Fantasy (-1)",
               "Trakt community rating 8.8 (+6)",
               "Complete series (+4)",
               "Neighbours rated it 9.2★ avg (+7)"
@@ -38294,7 +38035,7 @@
             "taste_score": 13.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-4)",
+              "Genre: Fantasy (-4)",
               "Trakt community rating 9.1 (+6)",
               "Complete series (+4)",
               "Neighbours rated it 9.2★ avg (+7)"
@@ -39262,7 +39003,7 @@
             "taste_score": 15.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-1)",
+              "Genre: Fantasy (-1)",
               "Trakt community rating 8.5 (+6)",
               "Complete series (+4)",
               "Neighbours rated it 8.3★ avg (+3)",
@@ -40053,7 +39794,7 @@
             "taste_score": 13.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-1)",
+              "Genre: Anime (-1)",
               "Trakt community rating 8.6 (+6)",
               "Complete series (+4)",
               "Neighbours rated it 8.8★ avg (+7)",
@@ -40305,7 +40046,7 @@
             "taste_score": 3.0,
             "category": "below_threshold",
             "reasons": [
-              "Genre: Action (-1)",
+              "Genre: Anime (-1)",
               "Complete series (+4)",
               "Neighbours rated it 8.4★ avg (+3)",
               "153.0 episodes — long commitment (-3)"
