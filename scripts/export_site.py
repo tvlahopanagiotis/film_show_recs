@@ -163,6 +163,7 @@ def build_payload() -> dict:
         "variants": [
             {"key": "all", "label": "All"},
             {"key": "post_2020", "label": "Post-2020"},
+            {"key": "post_2010", "label": "Post-2010"},
             {"key": "2000s", "label": "2000s"},
             {"key": "90s", "label": "90s"},
             {"key": "classic", "label": "Classic"},
@@ -180,6 +181,7 @@ def build_payload() -> dict:
     film_variants = (
         ("all", "All", FilmsPrefs()),
         ("post_2020", "Post-2020", FilmsPrefs(era_min_year=2020)),
+        ("post_2010", "Post-2010", FilmsPrefs(era_min_year=2010)),
         ("2000s", "2000s", FilmsPrefs(era_min_year=2000, era_max_year=2019)),
         ("90s", "90s", FilmsPrefs(era_min_year=1990, era_max_year=1999)),
         ("classic", "Classic", FilmsPrefs(era_max_year=1989)),
@@ -196,6 +198,7 @@ def build_payload() -> dict:
     show_variants = (
         ("all", "All", ShowsPrefs()),
         ("post_2020", "Post-2020", ShowsPrefs(era_min_year=2020)),
+        ("post_2010", "Post-2010", ShowsPrefs(era_min_year=2010)),
         ("2000s", "2000s", ShowsPrefs(era_min_year=2000, era_max_year=2019)),
         ("90s", "90s", ShowsPrefs(era_min_year=1990, era_max_year=1999)),
         ("classic", "Classic", ShowsPrefs(era_max_year=1989)),

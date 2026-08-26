@@ -34,7 +34,7 @@ TV_GENRE_SCORES: dict[str, int] = {
     "action": 0,
     "adventure": -1,
     "family": -3,
-    "animation": -3,
+    "children": -3,
     "reality": -8,
     "game-show": -10,
     "talk-show": -10,
@@ -53,6 +53,24 @@ TV_GENRE_COMBINATIONS: list[tuple[frozenset, int, str]] = [
     (frozenset({"crime", "thriller"}),  3, "Crime thriller"),
     (frozenset({"drama", "biography"}), 3, "Biographical drama"),
 ]
+
+# ── Animation penalty ─────────────────────────────────────────────────────────
+# Mirrors films/src/scorer.py: animation is a genuine negative, not a preference —
+# the few animated shows rated highly (BoJack, Death Note) are exceptions. Kept out
+# of TV_GENRE_SCORES and applied after GENRE_SCORE_CAP so an animated show can't
+# hide behind Drama/Crime tags. Trakt thresholds are calibrated against the animated
+# slice of shows_meta (median 6.3, max 9.1), not the all-genre distribution.
+# Trakt splits animation across three mutually exclusive genre slugs — an anime
+# show is tagged "anime" and never "animation", so matching on "animation" alone
+# would miss the largest animated category outright.
+ANIMATION_GENRES = {"animation", "anime", "donghua"}
+KIDS_GENRES = {"family", "children"}
+ANIMATION_PENALTY = -25
+ANIMATION_ACCLAIMED_TRAKT = 8.25
+ANIMATION_ACCLAIMED_PENALTY = -12
+ANIMATION_EXCEPTIONAL_TRAKT = 8.75
+ANIMATION_EXCEPTIONAL_PENALTY = -5
+FAMILY_WITH_ANIMATION_PENALTY = -6
 
 # ── Trakt community rating ────────────────────────────────────────────────────
 TRAKT_RATING_HIGH = 8.5   # score above this → bonus
@@ -187,6 +205,23 @@ def score_show(
         top_genre = max(genre_set, key=lambda g: TV_GENRE_SCORES.get(g, 0), default="")
         if top_genre:
             reasons.append(f"Genre: {top_genre.title()} ({genre_score:+d})")
+
+    # 1b. Animation penalty (applied after the genre cap)
+    if genre_set & ANIMATION_GENRES:
+        if trakt_rating is not None and trakt_rating >= ANIMATION_EXCEPTIONAL_TRAKT:
+            animation_penalty = ANIMATION_EXCEPTIONAL_PENALTY
+            animation_note = f"exceptional animation, Trakt {trakt_rating:.1f}"
+        elif trakt_rating is not None and trakt_rating >= ANIMATION_ACCLAIMED_TRAKT:
+            animation_penalty = ANIMATION_ACCLAIMED_PENALTY
+            animation_note = f"acclaimed animation, Trakt {trakt_rating:.1f}"
+        else:
+            animation_penalty = ANIMATION_PENALTY
+            animation_note = "animation is not my thing"
+        if genre_set & KIDS_GENRES:
+            animation_penalty += FAMILY_WITH_ANIMATION_PENALTY
+            animation_note += " + family/kids"
+        score += animation_penalty
+        reasons.append(f"Animated ({animation_penalty}) — {animation_note}")
 
     # 2. Genre combination bonuses
     for genre_combo, bonus, label in TV_GENRE_COMBINATIONS:

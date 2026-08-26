@@ -22,53 +22,64 @@ MIN_OVERLAP = 5   # slug overlap required to compute Pearson
 # ── My ratings (Trakt slug → 1–10 rating) ───────────────────────────────────
 MY_TV_RATINGS: dict[str, float] = {
     "breaking-bad": 10,
-    "the-wire": 10,
-    "the-sopranos": 10,
-    "true-detective": 9,
-    "chernobyl": 10,
-    "succession": 9,
-    "better-call-saul": 9,
+    "the-wire": 7,
+    "the-sopranos": 8,
+    "true-detective": 6,
+    "chernobyl": 9,
+    "succession": 10,
+    "better-call-saul": 8,
     "peaky-blinders": 8,
-    "mindhunter": 9,
-    "the-queens-gambit": 9,
+    "mindhunter": 10,
+    "the-queens-gambit": 8,
     "narcos": 8,
-    "westworld": 7,
-    "money-heist": 8,
-    "squid-game": 8,
+    "westworld": 8,
+    "money-heist": 4,
+    "squid-game": 6,
     "house-of-cards-2013": 8,
     "mad-men": 9,
-    "rome": 9,
-    "the-big-bang-theory": 6,
-    "friends": 7,
+    "rome": 8,
+    "the-big-bang-theory": 1,
+    "friends": 8,
     "silicon-valley": 8,
-    "brooklyn-nine-nine": 7,
+    "brooklyn-nine-nine": 9,
     "bojack-horseman": 9,
-    "rick-and-morty": 8,
-    "black-mirror": 9,
+    "rick-and-morty": 4,
+    "black-mirror": 3,
     "stranger-things": 7,
-    "game-of-thrones": 8,
-    "the-witcher": 7,
+    "game-of-thrones": 9,
+    "the-witcher": 5,
     "suits": 7,
     "killing-eve": 8,
-    "lupin": 7,
-    "you": 7,
-    "the-last-dance": 9,
-    "dont-look-up": 7,
+    "lupin": 6,
+    "you": 4,
+    "the-last-dance": 5,
     "ted-lasso": 8,
-    "two-and-a-half-men": 6,
-    "parks-and-recreation": 7,
+    "two-and-a-half-men": 1,
+    "parks-and-recreation": 8,
     "death-note": 8,
+    # newly rated
+    "the-americans": 8,
+    "3-body-problem": 7,
+    "mare-of-easttown": 7,
+    "only-murders-in-the-building": 7,
+    "the-night-manager": 7,
+    "the-man-in-the-high-castle": 7,
+    "the-world-at-war": 9,
+    "dexter": 6,
+    "fleabag": 2,
+    "mr-robot": 8,
+    "sherlock": 10,
+    "the-bear": 8,
+    "clarkson-s-farm": 7,
+    "the-grand-tour": 5,
+    "the-mandalorian": 6,
+    "slow-horses": 7,
+    "severance": 7,
 }
 
 # Shows to exclude from recommendations (already seen or not interested)
 TV_ALREADY_SEEN: set[str] = set(MY_TV_RATINGS.keys()) | {
-    "the-mandalorian",
-    "the-grand-tour",
-    "clarkson-s-farm",
-    "the-bear",
-    "mr-robot",
     "house-of-cards",           # UK original
-    "sherlock",
     "band-of-brothers",
     "planet-earth",
     "planet-earth-ii",
@@ -79,9 +90,15 @@ TV_ALREADY_SEEN: set[str] = set(MY_TV_RATINGS.keys()) | {
     "curb-your-enthusiasm",
 }
 
-# Trakt genre strings (lowercase) — used for genre alignment scoring
-PRESTIGE_GENRES = {"drama", "crime", "history", "mystery", "documentary", "thriller", "biography", "war"}
-BLOCKBUSTER_GENRES = {"action", "sci-fi", "reality", "animation", "comedy", "fantasy", "horror"}
+# Trakt genre strings (lowercase) — used for genre alignment scoring.
+# These must be exact Trakt genre slugs: "science-fiction" (not "sci-fi"), and
+# animation is split across "animation" / "anime" / "donghua" with no overlap —
+# every anime show is tagged "anime" and NOT "animation".
+PRESTIGE_GENRES = {"drama", "crime", "history", "mystery", "documentary", "thriller", "war"}
+BLOCKBUSTER_GENRES = {
+    "action", "science-fiction", "reality", "comedy", "fantasy", "horror",
+    "animation", "anime", "donghua", "children",
+}
 
 
 def compute_genre_alignment(neighbours_df: pd.DataFrame, user_ratings: pd.DataFrame, shows_meta: pd.DataFrame) -> pd.DataFrame:

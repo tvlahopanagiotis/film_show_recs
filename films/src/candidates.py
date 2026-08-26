@@ -331,9 +331,22 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
     agg = agg.sort_values("diversity_score", ascending=False).head(TOP_N_CANDIDATES)
     agg = agg.reset_index(drop=True)
 
+    # Build a set of normalized titles from my_ratings.csv so TMDB recent candidates
+    # that the user has actually rated (but aren't in ALREADY_SEEN) get filtered out
+    my_rated_norms: set[str] = set()
+    ratings_csv = DATA_DIR.parent / "my_ratings.csv"
+    if ratings_csv.exists():
+        try:
+            rated_df = pd.read_csv(ratings_csv, usecols=["Title"])
+            my_rated_norms = {norm(t) for t in rated_df["Title"].dropna()}
+        except Exception:
+            pass
+
     # Supplement with TMDB-discovered post-2020 films (added after the CF ranking
     # so they don't displace collaborative candidates from the top-80 pool)
     tmdb_recent = _load_tmdb_recent(prefs)
+    if not tmdb_recent.empty:
+        tmdb_recent = tmdb_recent[~tmdb_recent["title_norm"].isin(my_rated_norms)]
     if not tmdb_recent.empty:
         cf_norms = set(agg["title_norm"].tolist())
         new_recent = tmdb_recent[~tmdb_recent["title_norm"].isin(cf_norms)]

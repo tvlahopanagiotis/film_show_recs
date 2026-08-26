@@ -14,7 +14,6 @@ import pandas as pd
 # Based on average viewer ratings per genre from personal IMDb data
 
 GENRE_SCORES: dict[str, int] = {
-    "Animation":    10,
     "History":       9,
     "Biography":     8,
     "Drama":         7,
@@ -34,17 +33,32 @@ GENRE_SCORES: dict[str, int] = {
     "Action":       -5,
     "Sci-Fi":       -6,
 }
-# Family only scores positively when paired with Animation
-FAMILY_WITH_ANIMATION_BONUS = 7
+# Animation is deliberately absent from GENRE_SCORES — it is handled as a standalone
+# post-cap penalty (see ANIMATION_PENALTY) so it cannot be absorbed by the genre cap
+# when an animated film also carries Drama/History/War.
 
 GENRE_SCORE_CAP_POSITIVE = 20
 GENRE_SCORE_CAP_NEGATIVE = -15
+
+# ── Animation penalty ─────────────────────────────────────────────────────────
+# The handful of animated titles rated highly in my_ratings.csv are exceptions I
+# made, not evidence of a preference. Left unpenalised, collaborative filtering
+# reads those few high scores as "loves animation" and floods the recommendations.
+# Applied AFTER the genre cap so a Drama/History-tagged animated film can't hide
+# behind its other genres. The IMDb tiers are the "exceptional ones" escape hatch:
+# a genuinely acclaimed animated film is docked far less, but never rewarded.
+ANIMATION_PENALTY = -25                 # default: animation is a hard negative
+ANIMATION_ACCLAIMED_IMDB = 8.0          # ≥ this → treated as a possible exception
+ANIMATION_ACCLAIMED_PENALTY = -10
+ANIMATION_EXCEPTIONAL_IMDB = 8.5        # ≥ this → the rare film worth an exception
+ANIMATION_EXCEPTIONAL_PENALTY = -4
+# Family + Animation is the kids-movie signal — the furthest thing from my taste
+FAMILY_WITH_ANIMATION_PENALTY = -8
 
 # Genre combination bonuses
 COMBO_BONUSES: list[tuple[frozenset, int, str]] = [
     (frozenset({"Drama", "Crime"}),     7, "Drama + Crime combination (+7) — core taste sweet spot (Breaking Bad, Mindhunter)"),
     (frozenset({"Drama", "History"}),   5, "Drama + History combination (+5) — prestige history (Chernobyl, Schindler's List)"),
-    (frozenset({"Animation", "Drama"}), 8, "Animation + Drama combination (+8) — thematically serious animation (BoJack, Persepolis)"),
     (frozenset({"Comedy", "Crime"}),    3, "Comedy + Crime combination (+3) — smart genre blend (Knives Out, Hot Fuzz)"),
 ]
 # Sci-Fi + Drama without Action
@@ -245,11 +259,8 @@ def score_film(
     genre_score = 0
     for g in genre_set:
         if g == "Family":
-            continue  # handled separately
+            continue  # scored only via the animation component below
         genre_score += GENRE_SCORES.get(g, 0)
-
-    if "Family" in genre_set and "Animation" in genre_set:
-        genre_score += FAMILY_WITH_ANIMATION_BONUS
 
     genre_score = max(GENRE_SCORE_CAP_NEGATIVE, min(GENRE_SCORE_CAP_POSITIVE, genre_score))
     score += genre_score
@@ -277,6 +288,23 @@ def score_film(
     if "Sci-Fi" in genre_set and "Drama" in genre_set and "Action" not in genre_set:
         score += SCIFI_DRAMA_NO_ACTION_BONUS
         reasons.append(SCIFI_DRAMA_NO_ACTION_REASON)
+
+    # ── Component 1b: Animation penalty (applied after the genre cap) ──────
+    if "Animation" in genre_set:
+        if imdb_rating is not None and imdb_rating >= ANIMATION_EXCEPTIONAL_IMDB:
+            animation_penalty = ANIMATION_EXCEPTIONAL_PENALTY
+            animation_note = f"exceptional animation, IMDb {imdb_rating:.1f}"
+        elif imdb_rating is not None and imdb_rating >= ANIMATION_ACCLAIMED_IMDB:
+            animation_penalty = ANIMATION_ACCLAIMED_PENALTY
+            animation_note = f"acclaimed animation, IMDb {imdb_rating:.1f}"
+        else:
+            animation_penalty = ANIMATION_PENALTY
+            animation_note = "animation is not my thing"
+        if "Family" in genre_set:
+            animation_penalty += FAMILY_WITH_ANIMATION_PENALTY
+            animation_note += " + family/kids"
+        score += animation_penalty
+        reasons.append(f"Animated ({animation_penalty}) — {animation_note}")
 
     # ── Component 2: Franchise / blockbuster penalty ───────────────────────
     matched_franchise = [kw for kw in FRANCHISE_KEYWORDS if kw in combined_text]

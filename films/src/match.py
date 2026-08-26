@@ -86,9 +86,11 @@ def compute_genre_alignment(neighbours_df: pd.DataFrame, processed_ratings: pd.D
     """
     PRESTIGE_GENRES = {"Drama", "Crime", "History", "Biography", "War", "Mystery", "Documentary"}
     BLOCKBUSTER_GENRES = {"Action", "Sci-Fi", "Fantasy", "Horror", "Animation"}
-    # Note: Animation is listed under BLOCKBUSTER_GENRES here not because we dislike it,
-    # but because it tends to attract mainstream/family voters whose other tastes diverge.
-    # Serious animation (BoJack, Persepolis) will still surface via the scorer's Animation+Drama bonus.
+    # Note: Animation sits under BLOCKBUSTER_GENRES both because it attracts
+    # mainstream/family voters whose other tastes diverge, and because animation is
+    # a genuine negative for me — the few animated titles I rated highly are exceptions.
+    # Serious animation (BoJack, Persepolis) still gets a partial offset from the
+    # scorer's Animation + Drama combo bonus.
 
     neighbour_ids = set(neighbours_df["userId"].tolist())
     neighbour_ratings = processed_ratings[
