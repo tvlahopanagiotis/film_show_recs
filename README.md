@@ -37,7 +37,7 @@ recs/
 ├── shows/              ← Trakt-based collaborative filtering for TV shows
 │   ├── src/
 │   │   ├── ingest.py       # fetch Trakt user ratings + show metadata
-│   │   ├── match.py        # load TV ratings from films/my_ratings.csv + find your 100 nearest neighbours
+│   │   ├── match.py        # load TV ratings from films/my_ratings.csv + find your 200 nearest neighbours
 │   │   ├── candidates.py   # collect shows your neighbours loved
 │   │   ├── scorer.py       # deterministic taste scorer (all weights here)
 │   │   ├── recommend.py    # interactive CLI entry point
@@ -117,8 +117,8 @@ Nothing extra to do: the shows pipeline reads the TV Series / TV Mini Series row
 **Run the pipeline once (~2–5 min):**
 ```bash
 cd shows
-python src/ingest.py    # fetch Trakt data
-python src/match.py     # find your 100 nearest neighbours
+python src/ingest.py    # fetch Trakt data (1–2 h; resumes if interrupted)
+python src/match.py     # find your 200 nearest neighbours
 ```
 
 ---

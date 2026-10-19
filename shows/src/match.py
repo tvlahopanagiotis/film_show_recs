@@ -19,8 +19,12 @@ MY_NEIGHBOURS = DATA_DIR / "my_neighbours.parquet"
 MY_RATINGS_PATH = Path(__file__).parent.parent.parent / "films" / "my_ratings.csv"
 TV_TITLE_TYPES = {"TV Series", "TV Mini Series"}
 
-K_NEIGHBOURS = 100
+K_NEIGHBOURS = 200
 MIN_OVERLAP = 5   # slug overlap required to compute Pearson
+# Significance weighting: scale correlation by min(overlap, SHRINK_OVERLAP) / SHRINK_OVERLAP.
+# Without it, users who agree with me on 5 shows by chance outrank genuine matches,
+# and the effect grows with the number of users (see scripts/evaluate.py).
+SHRINK_OVERLAP = 20
 
 # Shows to exclude from recommendations (seen but not rated, or not interested).
 # Rated shows are excluded automatically.
@@ -147,7 +151,8 @@ def find_neighbours(my_ratings: dict) -> pd.DataFrame:
             if not np.isnan(r):
                 results.append({
                     "username": str(username),
-                    "correlation": float(r),
+                    "correlation": float(r) * min(len(group), SHRINK_OVERLAP) / SHRINK_OVERLAP,
+                    "raw_correlation": float(r),
                     "overlap_count": len(group),
                 })
         except Exception:

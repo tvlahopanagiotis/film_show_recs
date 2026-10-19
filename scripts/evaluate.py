@@ -23,6 +23,7 @@ are content-based and skipped. Nothing in data/ is overwritten.
 Usage (from recs/):
   python scripts/evaluate.py                # both pipelines, 5 folds
   python scripts/evaluate.py --only shows --folds 10
+  python scripts/evaluate.py --only shows --shows-data shows/data_new
 """
 
 from __future__ import annotations
@@ -136,12 +137,16 @@ def evaluate_films(k: int, seed: int) -> dict:
 
 # ── Shows ─────────────────────────────────────────────────────────────────────
 
-def evaluate_shows(k: int, seed: int) -> dict:
+def evaluate_shows(k: int, seed: int, data_dir: Path | None = None) -> dict:
     _activate_shows()
     import match
     import candidates
     from scorer import score_and_select
 
+    if data_dir is not None:  # evaluate a rebuilt dataset before swapping it in
+        for mod in (match, candidates):
+            mod.USER_RATINGS = data_dir / "user_ratings.parquet"
+            mod.SHOWS_META = data_dir / "shows_meta.parquet"
     match.MY_NEIGHBOURS = TMP_DIR / "shows_neighbours.parquet"
     match.TV_ALREADY_SEEN = set()                        # read by generate_candidates at call time
     candidates.CANDIDATES_OUT = TMP_DIR / "shows_candidates.parquet"
@@ -176,11 +181,13 @@ def main() -> None:
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--only", choices=["films", "shows"])
+    parser.add_argument("--shows-data", type=Path,
+                        help="evaluate shows on another data folder, e.g. shows/data_new")
     args = parser.parse_args()
 
     results = []
     if args.only in (None, "shows"):
-        results.append(evaluate_shows(args.folds, args.seed))
+        results.append(evaluate_shows(args.folds, args.seed, args.shows_data))
     if args.only in (None, "films"):
         results.append(evaluate_films(args.folds, args.seed))
 

@@ -56,8 +56,9 @@ python src/recommend.py --debug            # full scored candidate list
 
 # Shows pipeline (run from shows/)
 pip install -r requirements.txt
-python src/ingest.py     # fetch Trakt user ratings + show metadata (run once, needs TRAKT_CLIENT_ID)
-python src/match.py      # find 100 nearest neighbours (run once or after replacing films/my_ratings.csv)
+python src/ingest.py     # fetch Trakt user ratings + show metadata (run once, needs TRAKT_CLIENT_ID; 1–2 h)
+python src/ingest.py --out-dir data_new   # rebuild into a separate folder, then swap with data/
+python src/match.py      # find 200 nearest neighbours (run once or after replacing films/my_ratings.csv)
 python src/recommend.py
 python src/recommend.py --no-interactive
 python src/recommend.py --debug
@@ -102,9 +103,9 @@ Five-stage pipeline:
 
 Same five-stage pipeline, adapted for Trakt TV data:
 
-1. **`src/ingest.py`** — Seeds from `SEED_SLUGS` (15 hardcoded Trakt show slugs). Collects candidate users via Trakt `/shows/{slug}/lists` and `/shows/{slug}/comments` endpoints. Fetches show ratings for up to `MAX_USERS=300` users who share at least `MIN_SEED_OVERLAP=4` seed shows. Fetches extended metadata for all rated shows. Saves `user_ratings.parquet` and `shows_meta.parquet`. Both steps are idempotent.
+1. **`src/ingest.py`** — Seeds from every show I rated ≥ `SEED_MIN_RATING=7` (falls back to `SEED_SLUGS` when no `shows_meta` exists yet). Collects candidate users from `PAGES_PER_SEED` pages of each seed's public lists and comments, fetches ratings (most-seen users first) and keeps up to `MAX_USERS=3000` who rated ≥ `MIN_MY_OVERLAP=5` of my shows. Fetches metadata only for shows rated by ≥ `META_MIN_RATERS=3` kept users (plus my own), reusing `data/shows_meta.parquet`. Progress is checkpointed in `<out-dir>/ingest_checkpoint/`, so interrupted runs resume. `--out-dir` writes elsewhere (folders matching `shows/data_*/` are gitignored) so the live data stays untouched until you swap it in.
 
-2. **`src/match.py`** — `load_my_ratings()` reads the TV Series / TV Mini Series rows of `films/my_ratings.csv` (the same IMDb export films uses) and bridges them to Trakt slugs via `shows_meta.imdb_id`, printing any it can't match. Also defines `TV_ALREADY_SEEN`, extra slugs to exclude on top of rated shows. Computes Pearson correlation with `MIN_OVERLAP=5`, reranks by genre alignment using same `0.6 × correlation + 0.4 × genre_alignment` formula. Saves top `K_NEIGHBOURS=100` neighbours.
+2. **`src/match.py`** — `load_my_ratings()` reads the TV Series / TV Mini Series rows of `films/my_ratings.csv` (the same IMDb export films uses) and bridges them to Trakt slugs via `shows_meta.imdb_id`, printing any it can't match. Also defines `TV_ALREADY_SEEN`, extra slugs to exclude on top of rated shows. Computes Pearson correlation with `MIN_OVERLAP=5`, shrunk by `min(overlap, SHRINK_OVERLAP=20) / 20` so chance agreement on a handful of shows can't outrank real matches (raw value kept as `raw_correlation`). Reranks by genre alignment using same `0.6 × correlation + 0.4 × genre_alignment` formula. Saves top `K_NEIGHBOURS=200` neighbours.
 
 3. **`src/candidates.py`** — Gets shows rated ≥8.0 (Trakt 1–10 scale) by neighbours. `MIN_RECOMMENDER_COUNT=3`, `MIN_AVG_RATING=7.0`. Applies session filters: era (year), status (ended/ongoing), episode count, and famousness by `trakt_votes`. Top 60 candidates by diversity score.
 

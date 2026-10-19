@@ -263,7 +263,8 @@ def score_show(
             reasons.append(f"{aired_episodes} episodes — long commitment ({EPISODES_LONG_PENALTY})")
 
     # 8. Overview keyword signals
-    overview_lower = (overview or "").lower()
+    # Trakt returns null overviews for some shows; parquet turns them into NaN
+    overview_lower = overview.lower() if isinstance(overview, str) else ""
     for kw, bonus, label in POSITIVE_KEYWORDS:
         if kw in overview_lower:
             score += bonus

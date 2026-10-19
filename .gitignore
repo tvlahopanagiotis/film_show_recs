@@ -15,6 +15,7 @@ movielense-latest/
 # Generated data — parquet files (rebuilt by ingest.py / match.py)
 films/data/*.parquet
 shows/data/*.parquet
+shows/data_*/
 
 # Recommendation outputs (personal, generated at runtime)
 films/data/recommendations_*.json
