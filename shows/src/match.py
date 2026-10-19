@@ -30,12 +30,12 @@ MY_TV_RATINGS: dict[str, float] = {
     "better-call-saul": 8,
     "peaky-blinders": 8,
     "mindhunter": 10,
-    "the-queens-gambit": 8,
+    "the-queen-s-gambit": 8,
     "narcos": 8,
     "westworld": 8,
     "money-heist": 4,
     "squid-game": 6,
-    "house-of-cards-2013": 8,
+    "house-of-cards": 8,
     "mad-men": 9,
     "rome": 8,
     "the-big-bang-theory": 1,
@@ -47,7 +47,7 @@ MY_TV_RATINGS: dict[str, float] = {
     "black-mirror": 3,
     "stranger-things": 7,
     "game-of-thrones": 9,
-    "the-witcher": 5,
+    "the-witcher-2019": 5,
     "suits": 7,
     "killing-eve": 8,
     "lupin": 6,
@@ -58,7 +58,7 @@ MY_TV_RATINGS: dict[str, float] = {
     "parks-and-recreation": 8,
     "death-note": 8,
     # newly rated
-    "the-americans": 8,
+    "the-americans-2013": 8,
     "3-body-problem": 7,
     "mare-of-easttown": 7,
     "only-murders-in-the-building": 7,
@@ -75,12 +75,12 @@ MY_TV_RATINGS: dict[str, float] = {
     "the-mandalorian": 6,
     "slow-horses": 7,
     "severance": 7,
+    "band-of-brothers": 9,
+    "adolescence": 9,
 }
 
 # Shows to exclude from recommendations (already seen or not interested)
 TV_ALREADY_SEEN: set[str] = set(MY_TV_RATINGS.keys()) | {
-    "house-of-cards",           # UK original
-    "band-of-brothers",
     "planet-earth",
     "planet-earth-ii",
     "the-office-us",
