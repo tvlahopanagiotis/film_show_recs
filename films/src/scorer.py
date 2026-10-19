@@ -154,7 +154,19 @@ RECENT_ERA_MIN_YEAR = 2020
 
 SAFE_BET_THRESHOLD = 30
 WILD_CARD_THRESHOLD = 15
-SAFE_BET_FALLBACK_THRESHOLD = 20  # fallback when fewer than 2 safe bets found (must be < SAFE_BET_THRESHOLD)
+
+# ── Pick selection ────────────────────────────────────────────────────────────
+# Offline evaluation (scripts/evaluate.py): the candidate ranking (diversity_score =
+# film quality + neighbours' predicted rating) predicts my ratings far better than
+# taste_score (AUC ~0.90 vs ~0.74), so safe bets follow it, minus targeted vetoes for
+# things I'd never pick that a quality ranking pushes up (nature docs, animation,
+# franchise). Vetoes cost ~0.06 AUC on films I've rated: I rate The Dark Knight 10 but
+# Wonder Woman 1, and 12 of my 20 rated animated films 8+ — animation veto kept by choice.
+# Wild cards keep the taste scorer, limited to the less-famous half of the pool.
+SAFE_BET_FRANCHISE_VETO = True
+SAFE_BET_ANIMATION_VETO = True
+SAFE_BET_DOCUMENTARY_ONLY_VETO = True
+WILD_CARD_MAX_FAME_QUANTILE = 0.5
 
 
 # ── Core scoring ──────────────────────────────────────────────────────────────
@@ -307,13 +319,20 @@ def score_film(
         reasons.append(f"Animated ({animation_penalty}) — {animation_note}")
 
     # ── Component 2: Franchise / blockbuster penalty ───────────────────────
-    matched_franchise = [kw for kw in FRANCHISE_KEYWORDS if kw in combined_text]
+    # Whole-word match: plain substrings caught "marvelous" (The Prestige) and
+    # "technological marvel" (Monsters, Inc.)
+    matched_franchise = [
+        kw for kw in FRANCHISE_KEYWORDS if re.search(rf"\b{re.escape(kw)}\b", combined_text)
+    ]
     if matched_franchise:
         franchise_penalty = FRANCHISE_PENALTY
         score += franchise_penalty
         reasons.append(f"Franchise/superhero markers detected ({franchise_penalty}): {matched_franchise[0]}")
     else:
-        matched_sequel = [kw for kw in SEQUEL_KEYWORDS if kw in combined_text]
+        # Title only: the MovieLens tag "sequel" is also put on films that *have* sequels
+        matched_sequel = [
+            kw for kw in SEQUEL_KEYWORDS if re.search(rf"\b{re.escape(kw)}\b", title_lower)
+        ]
         if matched_sequel:
             drama_crime_score = sum(GENRE_SCORES.get(g, 0) for g in ["Drama", "Crime"] if g in genre_set)
             if drama_crime_score <= 10:
@@ -473,59 +492,45 @@ def score_candidates(candidates: pd.DataFrame, mood: str = "any") -> dict:
             "neighbour_score": round(float(row.get("avg_neighbour_rating", 0)), 2),
             "recommended_by": int(row.get("recommender_count", 0)),
             "weighted_score": round(float(row.get("weighted_score", 0)), 2),
+            "diversity_score": float(row.get("diversity_score") or 0),
+            "fame_signal": row.get("fame_signal"),
         })
 
     all_scored = sorted(scored_rows, key=lambda x: -x["taste_score"])
 
-    safe_bets = [r for r in all_scored if r["category"] == "safe_bet"]
-    wild_cards = [r for r in all_scored if r["category"] == "wild_card"]
-
-    # Fallback: lower threshold if fewer than 2 safe bets
-    if len(safe_bets) < 2:
-        for r in all_scored:
-            if r["category"] in ("wild_card", "skip") and r["taste_score"] >= SAFE_BET_FALLBACK_THRESHOLD:
-                r["category"] = "safe_bet"
-                safe_bets.append(r)
-                wild_cards = [x for x in wild_cards if x is not r]
-            if len(safe_bets) >= 2:
-                break
-
-    # Fallback: no wild cards — take highest-scoring skips with ≥1 negative keyword signal
-    if not wild_cards:
-        candidates_with_neg = [
-            r for r in all_scored
-            if r["category"] == "skip"
-            and any(pts < 0 for kw, pts in [(k, v) for k, v in NEGATIVE_KEYWORDS.items() if k in (r.get("tags_str") or "")])
-        ]
-        wild_cards = sorted(candidates_with_neg, key=lambda x: -x["taste_score"])[:2]
-        for r in wild_cards:
-            r["category"] = "wild_card"
-
-    # Diversity pass: if all top-3 safe bets share the same primary genre combo,
-    # swap the lowest-scoring one for the best candidate with a different combo.
-    def _primary_combo(item: dict) -> Optional[frozenset]:
-        genre_set = set(item.get("genres", []))
-        best = max(
-            ((combo, bonus) for combo, bonus, _ in COMBO_BONUSES if combo.issubset(genre_set)),
-            key=lambda x: x[1],
-            default=(None, 0),
+    # Safe bets: best candidate ranking among collaborative candidates (TMDB recent
+    # rows have no neighbour data and diversity_score 0), with the franchise veto
+    def _vetoed(r: dict) -> bool:
+        genres = set(r["genres"])
+        return (
+            (SAFE_BET_FRANCHISE_VETO and r["franchise_penalty"] <= FRANCHISE_PENALTY)
+            or (SAFE_BET_ANIMATION_VETO and "Animation" in genres)
+            or (SAFE_BET_DOCUMENTARY_ONLY_VETO and genres == {"Documentary"})
         )
-        return best[0]
 
-    if len(safe_bets) >= 3:
-        dominant = _primary_combo(safe_bets[0])
-        if dominant and all(_primary_combo(r) == dominant for r in safe_bets[:3]):
-            safe_bet_titles = {r["title"] for r in safe_bets}
-            for candidate in all_scored:
-                if (
-                    candidate["title"] not in safe_bet_titles
-                    and _primary_combo(candidate) != dominant
-                    and candidate["taste_score"] >= WILD_CARD_THRESHOLD
-                ):
-                    safe_bets[2] = candidate
-                    candidate["category"] = "safe_bet"
-                    wild_cards = [r for r in wild_cards if r["title"] != candidate["title"]]
-                    break
+    by_rank = sorted(
+        (r for r in all_scored if r["diversity_score"] > 0 and not _vetoed(r)),
+        key=lambda x: -x["diversity_score"],
+    )
+    safe_bets = by_rank[:3]
+    for r in safe_bets:
+        r["category"] = "safe_bet"
+        top = max(1, round((1 - r["diversity_score"]) * 100))
+        r["reasons"].insert(0, f"Neighbours + overall acclaim: top {top}% of candidates")
+
+    # Wild cards: best taste_score among the less-famous half of the pool
+    fame = pd.Series([r["fame_signal"] for r in all_scored], dtype=float)
+    max_fame = fame.quantile(WILD_CARD_MAX_FAME_QUANTILE) if fame.notna().any() else float("inf")
+    shown = {r["title"] for r in safe_bets}
+    wild_cards = [
+        r for r in all_scored
+        if r["title"] not in shown
+        and r["category"] != "skip"
+        and r["taste_score"] >= WILD_CARD_THRESHOLD
+        and (r["fame_signal"] is None or pd.isna(r["fame_signal"]) or r["fame_signal"] <= max_fame)
+    ][:2]
+    for r in wild_cards:
+        r["category"] = "wild_card"
 
     already_shown = {r["title"] for r in safe_bets[:3] + wild_cards[:2]}
     recent_picks = [
@@ -536,8 +541,8 @@ def score_candidates(candidates: pd.DataFrame, mood: str = "any") -> dict:
     ][:3]
 
     return {
-        "safe_bets": safe_bets[:3],
-        "wild_cards": wild_cards[:2],
+        "safe_bets": safe_bets,
+        "wild_cards": wild_cards,
         "recent_picks": recent_picks,
         "all_scored": all_scored,
     }

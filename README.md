@@ -24,7 +24,7 @@ recs/
 ├── films/              ← MovieLens ml-32m collaborative filtering for movies
 │   ├── src/
 │   │   ├── ingest.py       # download + preprocess MovieLens dataset
-│   │   ├── match.py        # find your 200 nearest neighbours
+│   │   ├── match.py        # find your 400 nearest neighbours
 │   │   ├── candidates.py   # collect films your neighbours loved
 │   │   ├── scorer.py       # deterministic taste scorer (all weights here)
 │   │   ├── recommend.py    # interactive CLI entry point
@@ -92,7 +92,7 @@ Free TMDB key: themoviedb.org/settings/api. Free OMDb key: omdbapi.com (1,000 re
 ```bash
 cd films
 python src/ingest.py       # download + preprocess ml-32m (~5–15 min), then TMDB enrichment (~35 min)
-python src/match.py        # find your 200 nearest neighbours (~2–10 min)
+python src/match.py        # find your 400 nearest neighbours (~1 min)
 python src/tmdb_recent.py  # fetch post-2020 candidates from TMDB (~2 min)
 ```
 
@@ -220,33 +220,42 @@ The addon runs both pipelines at startup with default settings and caches result
 
 ### Finding neighbours
 
-Both systems compute Pearson correlation between your ratings and every user in the dataset, requiring a minimum overlap of rated items. After getting the top candidates by correlation, they are reranked by a combined score:
+Both systems compute Pearson correlation between your ratings and every user in the dataset, then **shrink it for users with little overlap**:
 
 ```
-combined_score = 0.6 × correlation + 0.4 × genre_alignment
+similarity = correlation × min(overlap, N) / N        # N = 50 films, 20 shows
 ```
 
-Genre alignment measures how much a neighbour's highly-rated content skews toward prestige genres (Drama, Crime, History, Documentary) vs. blockbuster genres (Action, Sci-Fi, Fantasy). This surfaces neighbours who don't just correlate with your ratings but share your underlying taste axis.
+Without this, users who happen to agree with you on a handful of titles outrank genuine matches, and the problem grows with the number of users. Films keeps 400 neighbours; shows keeps 200 and still reranks by a genre-alignment score (prestige vs blockbuster genres).
 
-Films keeps 200 neighbours; shows keeps 100.
+### Ranking candidates
 
-### Generating candidates
+**Films.** Every film at least 2 neighbours have rated (any score) is a candidate. Its ranking (`diversity_score`) is a 50/50 blend of two percentiles:
 
-Films rated ≥ 4.0★ (out of 5) by neighbours, or shows rated ≥ 8.0 (out of 10), that you haven't seen. Each candidate gets a diversity score:
+- **quality** — how far above their own average *all* MovieLens users rate it
+- **personal prediction** — the same, among your neighbours only, weighted by similarity and shrunk when few neighbours rated it
 
-```
-diversity_score = 0.7 × weighted_neighbour_score + 0.3 × avg_rating × top_neighbour_similarity
-```
+Ratings are compared to each rater's own average, so harsh and generous raters count equally. Titles with no TMDB *movie* data are dropped — they're TV series that MovieLens lists as films. Top 80 go to the scorer, plus post-2020 films from the TMDB recent cache.
 
-The 0.3 component rewards content championed by your *closest* neighbours, not just broadly popular ones. Top 80 films / 60 shows are passed to the scorer, then supplemented by post-2020 films from the TMDB recent cache.
+**Shows.** Shows rated ≥ 8.0 by at least 3 neighbours; `diversity_score` = 0.7 × similarity-weighted rating sum + 0.3 × average rating × similarity of the closest endorsers. Top 60 go to the scorer.
 
 ### Post-2020 films (films only)
 
-Collaborative filtering is retrospective — neighbours need to have rated a film for it to appear as a candidate. For post-2020 films, `tmdb_recent.py` builds a separate pool by calling TMDB's recommendations endpoint for your top-rated films, filtering to 2020+, and scoring the results with the same taste scorer. These candidates compete in all output buckets.
+MovieLens (ml-32m) runs to 2023. For anything newer, `tmdb_recent.py` builds a separate pool by calling TMDB's recommendations endpoint for your top-rated films, filtering to 2020+, and scoring the results with the taste scorer.
 
-### Scoring
+### Choosing the picks
 
-The scorer applies a stack of signals to produce a final `taste_score`. All weights are named constants at the top of `films/src/scorer.py` and `shows/src/scorer.py` — edit them and re-run `--debug` to verify the effect.
+`python scripts/evaluate.py` hides part of your ratings and checks whether each ranking puts the hidden titles you loved above the ones you disliked. The candidate ranking beats the hand-tuned taste scorer clearly (films ~0.89 vs ~0.74 AUC, shows ~0.78 vs ~0.68), so:
+
+- **Safe bets** (and shows' recent picks) are the top of the candidate ranking, minus vetoes. Films veto franchise/superhero titles, animation and documentary-only titles; shows veto anything the taste scorer rates below 15.
+- **Wild cards** are the taste scorer's best picks among the less-famous half of the pool — the discovery slot.
+- **Recent picks** (films) are the taste scorer's best 2020+ titles.
+
+One caveat: the evaluation can only use titles you chose to watch, so it rewards generally acclaimed titles and can't measure discovery — that's what the vetoes and wild cards are for.
+
+### The taste scorer
+
+The scorer applies a stack of signals to produce a `taste_score`, used for wild cards, film recent picks and vetoes. All weights are named constants at the top of `films/src/scorer.py` and `shows/src/scorer.py`.
 
 **Films scorer signals:**
 
@@ -256,8 +265,8 @@ The scorer applies a stack of signals to produce a final `taste_score`. All weig
 | Genre combinations | varies | Drama+Crime, Animation+Drama, Sci-Fi+Drama, etc. |
 | Neighbour consensus | up to +7 | Avg neighbour rating ≥4.5★ → +7, ≥4.2★ → +3 |
 | IMDb gap signal | ±12 | Penalises overrated spectacle; rewards underseen prestige gems |
-| Franchise penalty | −40 | Hard veto for Marvel/DC/superhero titles |
-| Sequel penalty | −10 | Applied unless genre is Drama/Crime |
+| Franchise penalty | −40 | Marvel/DC/superhero keywords (whole-word match on title + tags) |
+| Sequel penalty | −10 | "Part 2"-style title markers, unless genre is Drama/Crime |
 | Positive keywords | up to +15 | "psychological", "dark", "based on true story", etc. |
 | Negative keywords | up to −20 | "slapstick", "blockbuster", "feel-good", etc. |
 | Era bonus | ±2–5 | Boosts classics (1950–75: +5, 1976–99: +3) and recent (2020+: +2) |
@@ -278,14 +287,7 @@ The scorer applies a stack of signals to produce a final `taste_score`. All weig
 | Negative keywords | up to −15 | "sitcom", "marvel", etc. |
 | Mood modifier | ±5–8 | Applied when mood filter is set |
 
-**Classification thresholds:**
-
-| | Safe Bet | Wild Card | Fallback Safe Bet |
-|---|---|---|---|
-| Films | ≥ 30 | ≥ 15 | ≥ 20 |
-| Shows | ≥ 38 | ≥ 24 | ≥ 30 |
-
-Output diversity: if all top-3 safe bets share the same primary genre combo (e.g. all Drama+Crime), the lowest-scoring one is swapped for the best candidate with a different genre combination.
+**Badge thresholds** (taste score, for titles not picked): films safe ≥ 30 / wild ≥ 15; shows safe ≥ 38 / wild ≥ 24.
 
 ---
 

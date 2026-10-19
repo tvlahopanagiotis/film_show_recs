@@ -47,7 +47,7 @@ python split_ratings.py
 # Films pipeline (run from films/)
 pip install -r requirements.txt
 python src/ingest.py     # download + preprocess MovieLens 25M (~5–15 min, run once)
-python src/match.py      # find 200 nearest neighbours (~2–10 min, run once)
+python src/match.py      # find 400 nearest neighbours (~1 min, run once)
 python src/tmdb_recent.py        # fetch post-2020 candidates via TMDB (run once, needs TMDB_API_KEY)
 python src/tmdb_recent.py --force  # re-fetch (after updating ratings or monthly for new releases)
 python src/recommend.py
@@ -89,11 +89,11 @@ Five-stage pipeline:
 
 1. **`src/ingest.py`** — Downloads MovieLens 25M (~250 MB), filters to users/movies with ≥50 ratings, saves three parquet files: `processed_ratings`, `movies_meta`, `movie_tags`. Also computes `imdb_ratings.parquet` — uses OMDb API if `OMDB_API_KEY` is set in `.env`, otherwise scales MovieLens average ratings as a proxy.
 
-2. **`src/match.py`** — Loads `my_ratings.csv` (IMDb export, 1–10 scale), bridges to MovieLens IDs via `links.csv` imdbId, computes Pearson correlation against every active MovieLens user (0.5–5.0 scale). Takes a 3× initial pool by Pearson, then reranks by `combined_score = 0.6 × correlation + 0.4 × genre_alignment`. Genre alignment measures how much a neighbour's highly-rated films skew toward prestige genres (Drama/Crime/History…) vs blockbuster genres (Action/Sci-Fi/Fantasy…). Saves top 200 neighbours. Also exports `get_era_weighted_neighbours()` for session-scoped era filtering.
+2. **`src/match.py`** — Loads `my_ratings.csv` (IMDb export, 1–10 scale), bridges to MovieLens IDs via `links.csv` imdbId, computes Pearson correlation against every active MovieLens user (0.5–5.0 scale) with `MIN_OVERLAP=10`, shrunk by `min(overlap, SHRINK_OVERLAP=50) / 50` (raw value kept as `raw_correlation`). Saves top `K_NEIGHBOURS=400`. No genre reranking — the old prestige-genre rerank measurably hurt. `get_era_weighted_neighbours()` reruns the same matching on era-only films (`ERA_MIN_OVERLAP=5`) for session-scoped era filtering.
 
-3. **`src/candidates.py`** — Gets all films rated ≥4.0★ by the 200 neighbours that the user hasn't seen. Uses `combined_score` for weighting. Computes `diversity_score = 0.7 × weighted_score + 0.3 × avg_neighbour_rating × top_neighbour_similarity`. Merges `imdb_ratings.parquet` so each candidate carries `imdb_rating`, `imdb_votes`, and `runtime`. Applies session filters (era, famousness, media type, runtime). `MIN_RECOMMENDER_COUNT` drops from 5 → 3 when an era filter is active. Contains the `ALREADY_SEEN` set (~280 normalised titles).
+3. **`src/candidates.py`** — Candidates are unseen films rated (any score) by ≥ `MIN_NEIGHBOUR_RATINGS=2` positively-correlated neighbours. `diversity_score` (the candidate ranking, 0–1) = `QUALITY_WEIGHT=0.5` × percentile of `quality_score` (mean deviation from each rater's own average, across all MovieLens raters) + 0.5 × percentile of `weighted_score` (the same deviation among neighbours, similarity-weighted, × n/(n+`PREDICTION_SHRINK=5`)). `recommender_count` = neighbours rating it ≥4★. Merges `imdb_ratings.parquet` and `tmdb_enriched.parquet` (runtime is coalesced from both); **drops titles with no TMDB data — these are TV series MovieLens lists as films**. Applies session filters (era up to `DATASET_MAX_YEAR=2023`, famousness, runtime). Contains the `ALREADY_SEEN` set (~280 normalised titles).
 
-4. **`src/scorer.py`** — Deterministic taste scorer. **All tunable weights are named constants at the top of the file.** Six components: genre score (capped ±20/15), franchise penalty (−40 hard veto), IMDb gap signal via `imdb_gap_signal()` (±12/8/−10), positive keyword tags (cap +15), negative keyword tags (cap −20), era bonus (±2–5), plus a session mood modifier (±3–9). Classifies into `safe_bet` (≥45), `wild_card` (≥28), or `skip`.
+4. **`src/scorer.py`** — Deterministic taste scorer. **All tunable weights are named constants at the top of the file.** Six components: genre score (capped ±20/15), franchise penalty (−40 hard veto), IMDb gap signal via `imdb_gap_signal()` (±12/8/−10), positive keyword tags (cap +15), negative keyword tags (cap −20), era bonus (±2–5), plus a session mood modifier (±3–9). Badges: `safe_bet` (≥30), `wild_card` (≥15), or `skip`. **Picks** (`score_candidates()`): safe bets = top `diversity_score` among collaborative candidates, vetoing franchise, animation and documentary-only titles (`SAFE_BET_*_VETO` flags); wild cards = best `taste_score` among the less-famous half of the pool; recent picks = best 2020+ `taste_score`. Franchise keywords match whole words only (substrings caught "marvelous"), sequel markers match the title only.
 
 5. **`src/recommend.py`** — Entry point. Interactive 5-question session via `get_session_preferences()`. Calls `get_era_weighted_neighbours()` when era filter is set (session-only, not saved). `--no-interactive` skips questions. `--debug` shows all 80 candidates. Saves JSON to `data/recommendations_YYYY-MM-DD.json`.
 
@@ -142,7 +142,6 @@ Standalone HTTP server (no Streamlit dependency) that exposes two Stremio catalo
 - `links.csv` imdbId values may have leading zeros stripped — `match.py` normalises both sides with `lstrip("0")` before merging.
 - MovieLens titles include year suffix (`"Toy Story (1995)"`) and article-last format (`"Dark Knight, The"`). The `norm()` function in `candidates.py` handles both.
 - `imdb_ratings.parquet` stores `imdb_rating`, `imdb_votes`, and `runtime`. If using the proxy path (no OMDb key), `runtime` is `None` and `imdb_votes` is the MovieLens rating count.
-- `SAFE_BET_FALLBACK_THRESHOLD` (38) must stay below `SAFE_BET_THRESHOLD` (45).
 - If `data/imdb_ratings.parquet` was generated before `imdb_votes`/`runtime` columns were added, delete it and re-run `src/ingest.py`.
 
 ### Shows
@@ -157,7 +156,7 @@ Standalone HTTP server (no Streamlit dependency) that exposes two Stremio catalo
 - `COMBO_BONUSES` — list of `(frozenset, bonus, reason_string)` tuples
 - `imdb_gap_signal()` — standalone function, edit thresholds directly
 - `POSITIVE_KEYWORDS` / `NEGATIVE_KEYWORDS` — tag-matching signals
-- `SAFE_BET_THRESHOLD` / `WILD_CARD_THRESHOLD` — classification cutoffs (currently 45/28)
+- `SAFE_BET_THRESHOLD` / `WILD_CARD_THRESHOLD` — badge cutoffs (currently 30/15); safe bets follow `diversity_score` (see `films/src/candidates.py`), with `SAFE_BET_*_VETO` flags
 
 Run `python src/recommend.py --debug` after any weight change to verify Drama+Crime films score higher than Action+Sci-Fi films.
 

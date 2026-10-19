@@ -19,15 +19,23 @@ TMDB_ENRICHED = DATA_DIR / "tmdb_enriched.parquet"
 TMDB_RECENT = DATA_DIR / "tmdb_recent_candidates.parquet"
 CANDIDATES_OUT = DATA_DIR / "candidates.parquet"
 
-# ml-32m covers up to Oct 2023, but post-2020 films have very few neighbour ratings
-# (collaborative filtering is retrospective — neighbours haven't rated recent films yet).
-# Era filters above this year fall back gracefully; post-2020 is handled by TMDB discovery.
-DATASET_MAX_YEAR = 2019
+# ml-32m covers up to Oct 2023. The old "4★+ from 5 neighbours" rule found almost no
+# recent films, so this used to be 2019; the prediction ranking only needs 2 neighbour
+# ratings, and post-2020 MovieLens films (Past Lives, The Father…) now rank fine.
+# Era filters above this year fall back gracefully; newer films come from TMDB discovery.
+DATASET_MAX_YEAR = 2023
 
-# Minimum number of neighbours who must have rated a film 4.0+ for it to qualify
-MIN_RECOMMENDER_COUNT = 5
-MIN_AVG_NEIGHBOUR_RATING = 3.8
-NEIGHBOUR_LIKE_THRESHOLD = 4.0  # MovieLens 0.5–5.0 scale
+# Candidate ranking (diversity_score) = QUALITY_WEIGHT × quality percentile
+#                                     + (1 − QUALITY_WEIGHT) × personal-prediction percentile
+#   quality    = how far above their own average all MovieLens users rate the film
+#   prediction = the same deviation among my neighbours, similarity-weighted and shrunk
+#                by n / (n + PREDICTION_SHRINK) when few neighbours rated it
+# Offline evaluation (scripts/evaluate.py): AUC 0.68 → ~0.90 vs the old
+# "count neighbours who rated it 4★+" ranking, which left half my favourites unscored.
+MIN_NEIGHBOUR_RATINGS = 2       # neighbours who must have rated the film (any score)
+PREDICTION_SHRINK = 5
+QUALITY_WEIGHT = 0.5
+NEIGHBOUR_LIKE_THRESHOLD = 4.0  # MovieLens 0.5–5.0 scale; only for recommender_count
 TOP_N_CANDIDATES = 80
 
 
@@ -117,15 +125,6 @@ _ALREADY_SEEN_RAW = [
 ALREADY_SEEN: set = {norm(t) for t in _ALREADY_SEEN_RAW}
 
 
-def _top_20_mean(sims: list) -> float:
-    """Mean similarity of the top-20% endorsers — rewards films championed by the closest neighbours."""
-    if not sims:
-        return 0.0
-    sorted_sims = sorted(sims, reverse=True)
-    top_n = max(1, len(sorted_sims) // 5)
-    return sum(sorted_sims[:top_n]) / top_n
-
-
 def _load_tmdb_recent(prefs) -> pd.DataFrame:
     """
     Load cached TMDB recent candidates and apply session filters.
@@ -158,7 +157,7 @@ def _load_tmdb_recent(prefs) -> pd.DataFrame:
     df["avg_neighbour_rating"] = 0.0
     df["recommender_count"] = 0
     df["weighted_score"] = 0.0
-    df["top_neighbour_similarity"] = 0.0
+    df["quality_score"] = None
     df["diversity_score"] = 0.0
     df["imdbId"] = None
     df["movieId"] = None
@@ -194,9 +193,6 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
         neighbours = pd.read_parquet(MY_NEIGHBOURS)
     print(f"Loaded {len(neighbours)} neighbours")
 
-    # Era-filtered runs have a smaller eligible pool per neighbour — lower the bar
-    min_recommender_count = 3 if prefs.era_min_year is not None else MIN_RECOMMENDER_COUNT
-
     ratings = pd.read_parquet(PROCESSED_RATINGS)
     movies_meta = pd.read_parquet(MOVIES_META)
 
@@ -208,56 +204,48 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
     else:
         movies_meta["tags_str"] = ""
 
-    neighbour_ids = set(neighbours["userId"].tolist())
+    # Only positively correlated neighbours vote
+    neighbours = neighbours[neighbours["correlation"] > 0]
+    sim_map = dict(zip(neighbours["userId"], neighbours["correlation"]))
+    # Ratings are compared to each rater's own average, so harsh and generous raters count equally
+    user_mean = ratings.groupby("userId")["rating"].mean()
 
-    # Use combined_score (post genre-alignment) if available, else fall back to correlation
-    score_col = "combined_score" if "combined_score" in neighbours.columns else "correlation"
-    corr_map = dict(zip(neighbours["userId"], neighbours[score_col]))
-
-    # Get all ratings by my neighbours
-    neighbour_ratings = ratings[ratings["userId"].isin(neighbour_ids)].copy()
-
-    # Keep only films neighbours liked (≥ 4.0★) that I haven't rated
+    # All ratings by my neighbours of films I haven't rated
     my_movie_ids = set(my_ratings.keys())
-    liked = neighbour_ratings[
-        (neighbour_ratings["rating"] >= NEIGHBOUR_LIKE_THRESHOLD)
-        & (~neighbour_ratings["movieId"].isin(my_movie_ids))
+    nr = ratings[
+        ratings["userId"].isin(sim_map.keys()) & ~ratings["movieId"].isin(my_movie_ids)
     ].copy()
+    nr["similarity"] = nr["userId"].map(sim_map)
+    nr["sim_dev"] = nr["similarity"] * (nr["rating"] - nr["userId"].map(user_mean))
+    nr["liked"] = nr["rating"] >= NEIGHBOUR_LIKE_THRESHOLD
 
-    liked["similarity"] = liked["userId"].map(corr_map)
-    liked["weighted_score"] = liked["rating"] * liked["similarity"]
-
-    # Collect per-movie similarity lists for the diversity boost
-    movie_sim_lists = liked.groupby("movieId")["similarity"].apply(list)
-
-    # Aggregate across neighbours
-    agg = liked.groupby("movieId").agg(
-        weighted_score=("weighted_score", "sum"),
-        recommender_count=("userId", "nunique"),
+    agg = nr.groupby("movieId").agg(
+        sim_dev=("sim_dev", "sum"),
+        sim_sum=("similarity", "sum"),
+        neighbour_ratings=("userId", "size"),
+        recommender_count=("liked", "sum"),
         avg_neighbour_rating=("rating", "mean"),
-    ).reset_index()
+    )
+    agg = agg[agg["neighbour_ratings"] >= MIN_NEIGHBOUR_RATINGS].reset_index()
+
+    # Personal prediction: neighbours' similarity-weighted deviation from their own average
+    n = agg["neighbour_ratings"]
+    agg["weighted_score"] = agg["sim_dev"] / agg["sim_sum"] * n / (n + PREDICTION_SHRINK)
+
+    # Quality: the same deviation across every MovieLens rater of the film
+    pool = ratings[ratings["movieId"].isin(agg["movieId"])]
+    quality = (pool["rating"] - pool["userId"].map(user_mean)).groupby(pool["movieId"]).mean()
+    agg["quality_score"] = agg["movieId"].map(quality)
 
     agg["coverage"] = agg["recommender_count"] / len(neighbours)
-
-    # Diversity boost: favour films championed by the most similar neighbours
-    agg["top_neighbour_similarity"] = agg["movieId"].map(
-        movie_sim_lists.apply(_top_20_mean)
+    agg["diversity_score"] = (
+        QUALITY_WEIGHT * agg["quality_score"].rank(pct=True)
+        + (1 - QUALITY_WEIGHT) * agg["weighted_score"].rank(pct=True)
     )
-
-    # Apply base filters
-    agg = agg[
-        (agg["recommender_count"] >= min_recommender_count)
-        & (agg["avg_neighbour_rating"] >= MIN_AVG_NEIGHBOUR_RATING)
-    ]
+    agg = agg.drop(columns=["sim_dev", "sim_sum"])
 
     # Enrich with metadata
     agg = agg.merge(movies_meta, on="movieId", how="left")
-
-    # diversity_score: 70% collaborative breadth + 30% quality-of-endorsement
-    agg["diversity_score"] = (
-        agg["weighted_score"] * 0.7
-        + agg["avg_neighbour_rating"] * agg["top_neighbour_similarity"] * 0.3
-    )
 
     # Merge IMDb proxy ratings (ML-average based fallback)
     if IMDB_RATINGS.exists():
@@ -276,6 +264,14 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
         # Real TMDB vote_average wins over proxy where available
         agg["imdb_rating"] = agg["imdb_rating_tmdb"].fillna(agg["imdb_rating"])
         agg.drop(columns=["imdb_rating_tmdb"], inplace=True, errors="ignore")
+        # Both sources carry runtime; without this the merge leaves runtime_x/runtime_y
+        # and the runtime session filter below silently never runs
+        if "runtime_x" in agg.columns:
+            agg["runtime"] = agg["runtime_y"].fillna(agg["runtime_x"])
+            agg.drop(columns=["runtime_x", "runtime_y"], inplace=True)
+        # MovieLens also lists TV series (Planet Earth, The Night Of, Firefly…). Their
+        # TMDB *movie* lookup fails, so no TMDB data is a reliable "this is TV" signal.
+        agg = agg[agg["tmdb_vote_count"].notna()]
 
     # Unified fame signal: tmdb_vote_count preferred, imdb_votes proxy as fallback
     if "tmdb_vote_count" in agg.columns:
@@ -360,8 +356,8 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
     if len(agg) > 0:
         print("\nTop 20 candidates by diversity score:")
         cols = [
-            "title", "recommender_count", "avg_neighbour_rating",
-            "top_neighbour_similarity", "weighted_score", "diversity_score",
+            "title", "neighbour_ratings", "recommender_count", "quality_score",
+            "weighted_score", "diversity_score",
         ]
         available = [c for c in cols if c in agg.columns]
         print(agg.head(20)[available].to_string(index=False))

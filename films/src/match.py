@@ -18,8 +18,14 @@ MY_NEIGHBOURS = DATA_DIR / "my_neighbours.parquet"
 
 MY_RATINGS_PATH = Path(__file__).parent.parent / "my_ratings.csv"
 
-K_NEIGHBOURS = 200
+K_NEIGHBOURS = 400
 MIN_OVERLAP = 10
+ERA_MIN_OVERLAP = 5   # era-only matching has fewer films to share
+# Significance weighting: scale correlation by min(overlap, SHRINK_OVERLAP) / SHRINK_OVERLAP,
+# so users who happen to agree with me on 10-15 films can't outrank genuine matches.
+# Offline evaluation (scripts/evaluate.py): this and dropping the old prestige-genre
+# reranking took the neighbour ranking from AUC 0.68 to ~0.85 on its own.
+SHRINK_OVERLAP = 50
 
 
 def load_my_ratings() -> dict:
@@ -76,53 +82,44 @@ def load_my_ratings() -> dict:
     return result
 
 
-def compute_genre_alignment(neighbours_df: pd.DataFrame, processed_ratings: pd.DataFrame, movies_meta: pd.DataFrame) -> pd.DataFrame:
+def _pearson_neighbours(ratings: pd.DataFrame, my_ratings: dict, min_overlap: int) -> pd.DataFrame:
     """
-    For each neighbour, compute how much their high-rated films skew toward
-    prestige genres vs blockbuster genres.
-
-    Returns neighbours_df with a new 'genre_alignment' column.
-    Score ranges from -1.0 (pure blockbuster voter) to +1.0 (pure prestige voter).
+    Pearson correlation between my ratings and every user who shares >= min_overlap films,
+    shrunk by min(overlap, SHRINK_OVERLAP) / SHRINK_OVERLAP. Returns the top K_NEIGHBOURS.
     """
-    PRESTIGE_GENRES = {"Drama", "Crime", "History", "Biography", "War", "Mystery", "Documentary"}
-    BLOCKBUSTER_GENRES = {"Action", "Sci-Fi", "Fantasy", "Horror", "Animation"}
-    # Note: Animation sits under BLOCKBUSTER_GENRES both because it attracts
-    # mainstream/family voters whose other tastes diverge, and because animation is
-    # a genuine negative for me — the few animated titles I rated highly are exceptions.
-    # Serious animation (BoJack, Persepolis) still gets a partial offset from the
-    # scorer's Animation + Drama combo bonus.
+    overlap_df = ratings[ratings["movieId"].isin(set(my_ratings.keys()))].copy()
+    overlap_df["my_rating"] = overlap_df["movieId"].map(my_ratings)
 
-    neighbour_ids = set(neighbours_df["userId"].tolist())
-    neighbour_ratings = processed_ratings[
-        (processed_ratings["userId"].isin(neighbour_ids))
-        & (processed_ratings["rating"] >= 4.0)
-    ].copy()
+    print(f"  {overlap_df['userId'].nunique():,} users have rated at least one of these films")
+    print(f"  Computing Pearson correlation (overlap >= {min_overlap} required)...")
 
-    neighbour_ratings = neighbour_ratings.merge(
-        movies_meta[["movieId", "genres"]], on="movieId", how="left"
+    results = []
+    for user_id, group in tqdm(overlap_df.groupby("userId"), desc="Similarity", unit="user"):
+        if len(group) < min_overlap:
+            continue
+        r, _ = pearsonr(group["my_rating"].values, group["rating"].values)
+        if not np.isnan(r):
+            results.append({
+                "userId": int(user_id),
+                "correlation": float(r) * min(len(group), SHRINK_OVERLAP) / SHRINK_OVERLAP,
+                "raw_correlation": float(r),
+                "overlap_count": len(group),
+            })
+
+    if not results:
+        return pd.DataFrame(columns=["userId", "correlation", "raw_correlation", "overlap_count"])
+    return (
+        pd.DataFrame(results)
+        .sort_values("correlation", ascending=False)
+        .head(K_NEIGHBOURS)
+        .reset_index(drop=True)
     )
-    neighbour_ratings["genre_set"] = neighbour_ratings["genres"].fillna("").apply(
-        lambda g: set(g.split("|"))
-    )
-
-    alignment_scores = {}
-    for user_id, group in neighbour_ratings.groupby("userId"):
-        good = group["genre_set"].apply(lambda gs: bool(gs & PRESTIGE_GENRES)).sum()
-        bad = group["genre_set"].apply(lambda gs: bool(gs & BLOCKBUSTER_GENRES)).sum()
-        total = max(good + bad, 1)
-        alignment_scores[user_id] = (good - bad) / total
-
-    neighbours_df = neighbours_df.copy()
-    neighbours_df["genre_alignment"] = (
-        neighbours_df["userId"].map(alignment_scores).fillna(0.0)
-    )
-    return neighbours_df
 
 
 def find_neighbours(my_ratings: dict) -> pd.DataFrame:
     """
-    Compute Pearson correlation between my ratings and every active MovieLens user.
-    Reranks by genre alignment and returns top K_NEIGHBOURS neighbours.
+    Compute shrunk Pearson correlation between my ratings and every active MovieLens user
+    and return the top K_NEIGHBOURS.
     """
     if not PROCESSED_RATINGS.exists():
         raise FileNotFoundError(
@@ -134,66 +131,15 @@ def find_neighbours(my_ratings: dict) -> pd.DataFrame:
     ratings = pd.read_parquet(PROCESSED_RATINGS)
     print(f"  {len(ratings):,} ratings loaded in {time.time()-t0:.1f}s")
 
-    movies_meta = pd.read_parquet(MOVIES_META, columns=["movieId", "genres"])
+    neighbours = _pearson_neighbours(ratings, my_ratings, MIN_OVERLAP)
 
-    # Filter to only movies I've rated — this massively reduces work
-    my_movie_ids = set(my_ratings.keys())
-    overlap_df = ratings[ratings["movieId"].isin(my_movie_ids)].copy()
-    overlap_df["my_rating"] = overlap_df["movieId"].map(my_ratings)
-
-    n_candidate_users = overlap_df["userId"].nunique()
-    print(f"  {n_candidate_users:,} users have rated at least one of my movies")
-    print(f"  Computing Pearson correlation (overlap >= {MIN_OVERLAP} required)...")
-
-    results = []
-    grouped = overlap_df.groupby("userId")
-
-    for user_id, group in tqdm(grouped, desc="Similarity", unit="user"):
-        if len(group) < MIN_OVERLAP:
-            continue
-        try:
-            r, _ = pearsonr(group["my_rating"].values, group["rating"].values)
-            if not np.isnan(r):
-                results.append(
-                    {
-                        "userId": int(user_id),
-                        "correlation": float(r),
-                        "overlap_count": len(group),
-                    }
-                )
-        except Exception:
-            pass
-
-    # Take a larger initial pool so genre alignment can promote prestige-leaning
-    # neighbours that pure Pearson may have ranked slightly lower
-    neighbours = pd.DataFrame(results).sort_values("correlation", ascending=False)
-    neighbours = neighbours.head(K_NEIGHBOURS * 3).reset_index(drop=True)
-
-    # Genre alignment reranking
-    print("\nComputing genre alignment scores...")
-    neighbours = compute_genre_alignment(neighbours, ratings, movies_meta)
-
-    # 60% Pearson (taste similarity) + 40% genre alignment (taste type match)
-    neighbours["combined_score"] = (
-        neighbours["correlation"] * 0.6 + neighbours["genre_alignment"] * 0.4
-    )
-    neighbours = (
-        neighbours.sort_values("combined_score", ascending=False)
-        .head(K_NEIGHBOURS)
-        .reset_index(drop=True)
-    )
-
-    print(f"\nTop 10 neighbours after genre alignment reranking:")
+    print(f"\nTop 10 neighbours:")
     print(
-        neighbours[["userId", "correlation", "genre_alignment", "combined_score", "overlap_count"]]
+        neighbours[["userId", "correlation", "raw_correlation", "overlap_count"]]
         .head(10)
         .to_string(index=False)
     )
-
-    print(f"\nGenre alignment stats across {len(neighbours)} neighbours:")
-    print(f"  Mean alignment: {neighbours['genre_alignment'].mean():.3f}")
-    print(f"  Neighbours with alignment > 0.3 (prestige-leaning): {(neighbours['genre_alignment'] > 0.3).sum()}")
-    print(f"  Neighbours with alignment < 0 (blockbuster-leaning): {(neighbours['genre_alignment'] < 0).sum()}")
+    print(f"\nMedian overlap across {len(neighbours)} neighbours: {neighbours['overlap_count'].median():.0f} films")
 
     neighbours.to_parquet(MY_NEIGHBOURS, index=False)
     print(f"\nSaved {len(neighbours)} neighbours to my_neighbours.parquet")
@@ -202,20 +148,17 @@ def find_neighbours(my_ratings: dict) -> pd.DataFrame:
 
 def get_era_weighted_neighbours(my_ratings: dict, era_min_year: int):
     """
-    Recompute Pearson correlation using only films from era_min_year onwards.
+    Recompute neighbours using only my films from era_min_year onwards.
     Returns a neighbours DataFrame in the same format as find_neighbours() —
     session-only, never written to disk.
     Returns None if there aren't enough era-overlapping films to be meaningful.
     """
     ratings = pd.read_parquet(PROCESSED_RATINGS)
-    movies_meta = pd.read_parquet(MOVIES_META, columns=["movieId", "genres", "year"])
+    movies_meta = pd.read_parquet(MOVIES_META, columns=["movieId", "year"])
 
-    # Restrict to era films
     era_movie_ids = set(
         movies_meta[movies_meta["year"].notna() & (movies_meta["year"] >= era_min_year)]["movieId"].tolist()
     )
-
-    # My ratings restricted to that era
     my_era_ratings = {mid: r for mid, r in my_ratings.items() if mid in era_movie_ids}
 
     if len(my_era_ratings) < MIN_OVERLAP:
@@ -226,48 +169,12 @@ def get_era_weighted_neighbours(my_ratings: dict, era_min_year: int):
         return None
 
     print(f"\nEra-weighted neighbours: {len(my_era_ratings)} of my films from {era_min_year}+")
-    print(f"  Computing Pearson on era-only overlap...")
-
-    overlap_df = ratings[ratings["movieId"].isin(set(my_era_ratings.keys()))].copy()
-    overlap_df["my_rating"] = overlap_df["movieId"].map(my_era_ratings)
-
-    ERA_MIN_OVERLAP = 3  # lower than global MIN_OVERLAP — era pools are smaller
-    results = []
-    for user_id, group in tqdm(overlap_df.groupby("userId"), desc="Era similarity", unit="user"):
-        if len(group) < ERA_MIN_OVERLAP:
-            continue
-        try:
-            r, _ = pearsonr(group["my_rating"].values, group["rating"].values)
-            if not np.isnan(r):
-                results.append({
-                    "userId": int(user_id),
-                    "correlation": float(r),
-                    "overlap_count": len(group),
-                })
-        except Exception:
-            pass
-
-    if not results:
+    neighbours = _pearson_neighbours(ratings, my_era_ratings, ERA_MIN_OVERLAP)
+    if neighbours.empty:
         print("  No neighbours found with sufficient era overlap. Falling back to precomputed neighbours.")
         return None
 
-    neighbours = pd.DataFrame(results).sort_values("correlation", ascending=False)
-    neighbours = neighbours.head(K_NEIGHBOURS * 3).reset_index(drop=True)
-
-    neighbours = compute_genre_alignment(neighbours, ratings, movies_meta[["movieId", "genres"]])
-    neighbours["combined_score"] = (
-        neighbours["correlation"] * 0.6 + neighbours["genre_alignment"] * 0.4
-    )
-    neighbours = (
-        neighbours.sort_values("combined_score", ascending=False)
-        .head(K_NEIGHBOURS)
-        .reset_index(drop=True)
-    )
-
-    print(
-        f"  Top correlation: {neighbours['correlation'].iloc[0]:.3f}  "
-        f"Mean alignment: {neighbours['genre_alignment'].mean():.3f}"
-    )
+    print(f"  Top correlation: {neighbours['correlation'].iloc[0]:.3f}")
     return neighbours
 
 
