@@ -13,8 +13,15 @@ import pandas as pd
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 SAFE_BET_THRESHOLD = 38
-SAFE_BET_FALLBACK_THRESHOLD = 30   # must be < SAFE_BET_THRESHOLD
 WILD_CARD_THRESHOLD = 24
+
+# ── Pick selection ────────────────────────────────────────────────────────────
+# Offline evaluation (scripts/evaluate.py) shows the neighbour signal predicts my
+# ratings far better than taste_score (AUC ~0.78 vs ~0.68), so safe bets are the
+# shows most loved by my neighbours, with taste_score only as a veto. Wild cards
+# keep the taste scorer but are limited to less-voted shows, for discovery.
+VETO_THRESHOLD = 15              # taste_score below this never becomes a pick
+WILD_CARD_MAX_VOTES_QUANTILE = 0.5  # wild cards come from the less-voted half of the pool
 
 # ── Genre weights (Trakt genre strings, lowercase) ────────────────────────────
 TV_GENRE_SCORES: dict[str, int] = {
@@ -348,6 +355,7 @@ def score_and_select(candidates: "pd.DataFrame", mood: str = "any") -> dict:
 
         scored.append({
             "slug": row.get("slug", ""),
+            "diversity_score": float(row.get("diversity_score") or 0),
             "title": row.get("title", ""),
             "year": row.get("year"),
             "genres": genres,
@@ -365,25 +373,39 @@ def score_and_select(candidates: "pd.DataFrame", mood: str = "any") -> dict:
 
     scored.sort(key=lambda x: x["taste_score"], reverse=True)
 
-    safe_bets = [s for s in scored if s["category"] == "safe_bet"]
-    wild_cards = [s for s in scored if s["category"] == "wild_card"]
+    # Safe bets + recent picks: ranked by neighbour signal, vetoed by taste_score
+    by_neighbours = sorted(
+        (s for s in scored if s["taste_score"] >= VETO_THRESHOLD),
+        key=lambda x: x["diversity_score"],
+        reverse=True,
+    )
+    safe_bets = by_neighbours[:3]
+    for s in safe_bets:
+        s["category"] = "safe_bet"
+        s["reasons"].insert(0, f"Loved by {s['recommended_by']} of your neighbours")
 
-    # Fallback: if no safe bets, lower the bar
-    if not safe_bets:
-        fallback = [s for s in scored if s["taste_score"] >= SAFE_BET_FALLBACK_THRESHOLD]
-        safe_bets = fallback[:3]
-
-    already_shown = {s["title"] for s in safe_bets[:3] + wild_cards[:2]}
-    recent_picks = [
+    # Wild cards: best taste_score among the less-voted half of the pool
+    votes = pd.Series([s["trakt_votes"] for s in scored], dtype=float)
+    max_votes = votes.quantile(WILD_CARD_MAX_VOTES_QUANTILE) if votes.notna().any() else float("inf")
+    shown = {s["slug"] for s in safe_bets}
+    wild_cards = [
         s for s in scored
-        if _year_int(s.get("year")) >= RECENT_ERA_MIN_YEAR
+        if s["slug"] not in shown
         and s["taste_score"] >= WILD_CARD_THRESHOLD
-        and s["title"] not in already_shown
+        and (s["trakt_votes"] is None or pd.isna(s["trakt_votes"]) or s["trakt_votes"] <= max_votes)
+    ][:2]
+    for s in wild_cards:
+        s["category"] = "wild_card"
+
+    shown |= {s["slug"] for s in wild_cards}
+    recent_picks = [
+        s for s in by_neighbours
+        if _year_int(s.get("year")) >= RECENT_ERA_MIN_YEAR and s["slug"] not in shown
     ][:3]
 
     return {
-        "safe_bets": safe_bets[:3],
-        "wild_cards": wild_cards[:2],
+        "safe_bets": safe_bets,
+        "wild_cards": wild_cards,
         "recent_picks": recent_picks,
         "all_scored": scored,
     }

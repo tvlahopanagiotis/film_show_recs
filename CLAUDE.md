@@ -109,7 +109,7 @@ Same five-stage pipeline, adapted for Trakt TV data:
 
 3. **`src/candidates.py`** — Gets shows rated ≥8.0 (Trakt 1–10 scale) by neighbours. `MIN_RECOMMENDER_COUNT=3`, `MIN_AVG_RATING=7.0`. Applies session filters: era (year), status (ended/ongoing), episode count, and famousness by `trakt_votes`. Top 60 candidates by diversity score.
 
-4. **`src/scorer.py`** — Same deterministic structure as films scorer. Signals: `TV_GENRE_SCORES` (Trakt genre strings, capped at 18), `TV_GENRE_COMBINATIONS` combos, Trakt community rating signal (≥8.5 → +6, <6.5 → −8), status signal (ended/cancelled → +4), neighbour consensus signal, episode count signal (6–60 eps sweet spot → +3, >150 → −3), keyword signals, mood modifier. Classifies into `safe_bet` (≥38), `wild_card` (≥24).
+4. **`src/scorer.py`** — Same deterministic structure as films scorer. Signals: `TV_GENRE_SCORES` (Trakt genre strings, capped at 18), `TV_GENRE_COMBINATIONS` combos, Trakt community rating signal (≥8.5 → +6, <6.5 → −8), status signal (ended/cancelled → +4), neighbour consensus signal, episode count signal (6–60 eps sweet spot → +3, >150 → −3), keyword signals, mood modifier. Picks are chosen in `score_and_select()`: **safe bets and recent picks are ranked by the neighbour signal (`diversity_score`)**, with `taste_score < VETO_THRESHOLD=15` as a veto, because offline evaluation shows the neighbour signal predicts my ratings much better (AUC ~0.78 vs ~0.68). **Wild cards** are the best `taste_score ≥ 24` among the less-voted half of the pool (`WILD_CARD_MAX_VOTES_QUANTILE`), for discovery.
 
 5. **`src/recommend.py`** — Same entry point pattern. 5-question interactive session: era, status (finished vs ongoing), episode commitment (≤15 / ≤50 / any), obscurity, mood. Saves JSON to `data/tv_recommendations_YYYY-MM-DD.json`.
 
@@ -166,6 +166,6 @@ Run `python src/recommend.py --debug` after any weight change to verify Drama+Cr
 - `TV_GENRE_COMBINATIONS` — list of `(frozenset, bonus, reason_string)` tuples
 - `TRAKT_RATING_HIGH` / `TRAKT_RATING_LOW` — community rating thresholds
 - `POSITIVE_KEYWORDS` / `NEGATIVE_KEYWORDS` — overview keyword signals
-- `SAFE_BET_THRESHOLD` / `WILD_CARD_THRESHOLD` — classification cutoffs (currently 38/24)
+- `SAFE_BET_THRESHOLD` / `WILD_CARD_THRESHOLD` — classification cutoffs (currently 38/24); `VETO_THRESHOLD` (15) blocks neighbour-ranked picks
 
-Run `python src/recommend.py --debug` after any weight change to verify Drama+Crime shows score higher than Reality/Game-show content.
+Run `python src/recommend.py --debug` after any weight change to verify Drama+Crime shows score higher than Reality/Game-show content, and `python scripts/evaluate.py --only shows` to check the ranking didn't get worse.
