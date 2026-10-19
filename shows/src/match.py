@@ -1,6 +1,6 @@
 """
 Load my TV ratings and find nearest neighbours via Pearson correlation.
-Run once (or after updating MY_TV_RATINGS): python src/match.py
+Run once (or after replacing films/my_ratings.csv): python src/match.py
 """
 
 import time
@@ -15,72 +15,16 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 USER_RATINGS = DATA_DIR / "user_ratings.parquet"
 SHOWS_META = DATA_DIR / "shows_meta.parquet"
 MY_NEIGHBOURS = DATA_DIR / "my_neighbours.parquet"
+# Same IMDb export the films pipeline reads; TV rows are matched to Trakt by IMDb ID
+MY_RATINGS_PATH = Path(__file__).parent.parent.parent / "films" / "my_ratings.csv"
+TV_TITLE_TYPES = {"TV Series", "TV Mini Series"}
 
 K_NEIGHBOURS = 100
 MIN_OVERLAP = 5   # slug overlap required to compute Pearson
 
-# ── My ratings (Trakt slug → 1–10 rating) ───────────────────────────────────
-MY_TV_RATINGS: dict[str, float] = {
-    "breaking-bad": 10,
-    "the-wire": 7,
-    "the-sopranos": 8,
-    "true-detective": 6,
-    "chernobyl": 9,
-    "succession": 10,
-    "better-call-saul": 8,
-    "peaky-blinders": 8,
-    "mindhunter": 10,
-    "the-queen-s-gambit": 8,
-    "narcos": 8,
-    "westworld": 8,
-    "money-heist": 4,
-    "squid-game": 6,
-    "house-of-cards": 8,
-    "mad-men": 9,
-    "rome": 8,
-    "the-big-bang-theory": 1,
-    "friends": 8,
-    "silicon-valley": 8,
-    "brooklyn-nine-nine": 9,
-    "bojack-horseman": 9,
-    "rick-and-morty": 4,
-    "black-mirror": 3,
-    "stranger-things": 7,
-    "game-of-thrones": 9,
-    "the-witcher-2019": 5,
-    "suits": 7,
-    "killing-eve": 8,
-    "lupin": 6,
-    "you": 4,
-    "the-last-dance": 5,
-    "ted-lasso": 8,
-    "two-and-a-half-men": 1,
-    "parks-and-recreation": 8,
-    "death-note": 8,
-    # newly rated
-    "the-americans-2013": 8,
-    "3-body-problem": 7,
-    "mare-of-easttown": 7,
-    "only-murders-in-the-building": 7,
-    "the-night-manager": 7,
-    "the-man-in-the-high-castle": 7,
-    "the-world-at-war": 9,
-    "dexter": 6,
-    "fleabag": 2,
-    "mr-robot": 8,
-    "sherlock": 10,
-    "the-bear": 8,
-    "clarkson-s-farm": 7,
-    "the-grand-tour": 5,
-    "the-mandalorian": 6,
-    "slow-horses": 7,
-    "severance": 7,
-    "band-of-brothers": 9,
-    "adolescence": 9,
-}
-
-# Shows to exclude from recommendations (already seen or not interested)
-TV_ALREADY_SEEN: set[str] = set(MY_TV_RATINGS.keys()) | {
+# Shows to exclude from recommendations (seen but not rated, or not interested).
+# Rated shows are excluded automatically.
+TV_ALREADY_SEEN: set[str] = {
     "planet-earth",
     "planet-earth-ii",
     "the-office-us",
@@ -99,6 +43,35 @@ BLOCKBUSTER_GENRES = {
     "action", "science-fiction", "reality", "comedy", "fantasy", "horror",
     "animation", "anime", "donghua", "children",
 }
+
+
+def load_my_ratings() -> dict:
+    """
+    Read the TV rows of my_ratings.csv (IMDb export) and return {trakt_slug: my_rating}.
+    Bridges IMDb tt-IDs to Trakt slugs via shows_meta.parquet.
+    """
+    if not MY_RATINGS_PATH.exists():
+        raise FileNotFoundError(
+            f"Ratings file not found at {MY_RATINGS_PATH}\n"
+            "Export your ratings from IMDb and save as films/my_ratings.csv."
+        )
+
+    my_df = pd.read_csv(MY_RATINGS_PATH)
+    my_df = my_df[my_df["Title Type"].isin(TV_TITLE_TYPES)].copy()
+    my_df["Your Rating"] = pd.to_numeric(my_df["Your Rating"], errors="coerce")
+    my_df = my_df.dropna(subset=["Const", "Your Rating"])
+
+    shows_meta = pd.read_parquet(SHOWS_META, columns=["slug", "imdb_id"])
+    merged = my_df.merge(shows_meta, left_on="Const", right_on="imdb_id", how="left")
+    matched = merged.dropna(subset=["slug"])
+    unmatched = merged[merged["slug"].isna()]
+
+    print(f"My TV ratings: {len(my_df)} total")
+    print(f"  Matched:     {len(matched)} to Trakt slugs ({len(matched)/max(len(my_df), 1):.0%})")
+    if not unmatched.empty:
+        print(f"  Unmatched (not in shows_meta): {unmatched['Title'].tolist()}")
+
+    return dict(zip(matched["slug"], matched["Your Rating"].astype(float)))
 
 
 def compute_genre_alignment(neighbours_df: pd.DataFrame, user_ratings: pd.DataFrame, shows_meta: pd.DataFrame) -> pd.DataFrame:
@@ -214,5 +187,5 @@ def find_neighbours(my_ratings: dict) -> pd.DataFrame:
 
 if __name__ == "__main__":
     t_start = time.time()
-    find_neighbours(MY_TV_RATINGS)
+    find_neighbours(load_my_ratings())
     print(f"\nTotal time: {time.time() - t_start:.1f}s")

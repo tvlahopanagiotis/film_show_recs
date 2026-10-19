@@ -76,7 +76,7 @@ def films_genre_stats(df: pd.DataFrame) -> dict[str, float]:
 
 
 def shows_genre_stats(my_tv_ratings: dict, shows_meta: pd.DataFrame) -> dict[str, float]:
-    """Compute avg rating per genre from MY_TV_RATINGS + shows_meta."""
+    """Compute avg rating per genre from my TV ratings + shows_meta."""
     rows = []
     for slug, rating in my_tv_ratings.items():
         meta_row = shows_meta[shows_meta["slug"] == slug]

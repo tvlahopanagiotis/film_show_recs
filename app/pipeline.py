@@ -94,13 +94,13 @@ def run_shows(prefs) -> dict:
         }
     """
     _activate_shows()
-    from match import MY_TV_RATINGS
+    from match import load_my_ratings
     from candidates import generate_candidates
     from scorer import score_and_select
     from recommend import fmt_active_filters
 
     t0 = time.time()
-    candidates_df = generate_candidates(MY_TV_RATINGS, prefs)
+    candidates_df = generate_candidates(load_my_ratings(), prefs)
     results = score_and_select(candidates_df, mood=prefs.mood)
 
     # Enrich all_scored with diversity_score
@@ -118,7 +118,7 @@ def run_shows(prefs) -> dict:
 
 
 def get_my_tv_ratings() -> dict:
-    """Return MY_TV_RATINGS dict from shows/src/match.py."""
+    """Return {trakt_slug: rating} for the TV rows of films/my_ratings.csv."""
     _activate_shows()
-    from match import MY_TV_RATINGS
-    return MY_TV_RATINGS
+    from match import load_my_ratings
+    return load_my_ratings()

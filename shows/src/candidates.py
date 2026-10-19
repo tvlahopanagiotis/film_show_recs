@@ -69,9 +69,9 @@ def generate_candidates(my_ratings: dict, prefs=None, neighbours=None) -> pd.Dat
     neighbour_ratings = user_ratings[user_ratings["username"].isin(neighbour_names)].copy()
 
     my_slugs = set(my_ratings.keys())
-    # Import TV_ALREADY_SEEN from match
+    # Exclude rated shows plus the extra seen/not-interested list from match
     from match import TV_ALREADY_SEEN
-    already_seen_norms = {norm(s) for s in TV_ALREADY_SEEN}
+    already_seen_norms = {norm(s) for s in my_slugs | TV_ALREADY_SEEN}
 
     liked = neighbour_ratings[
         (neighbour_ratings["rating"] >= NEIGHBOUR_LIKE_THRESHOLD)

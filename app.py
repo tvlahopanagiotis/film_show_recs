@@ -428,7 +428,7 @@ with tab3:
                 )
                 st.plotly_chart(fig_tv, use_container_width=True)
                 st.caption(
-                    f"Based on {len(my_tv)} rated shows from MY_TV_RATINGS."
+                    f"Based on {len(my_tv)} rated shows from my_ratings.csv."
                 )
             else:
                 st.info("No genre data found — run `python src/ingest.py` in shows/.")

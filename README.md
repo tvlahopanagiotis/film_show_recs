@@ -37,7 +37,7 @@ recs/
 ├── shows/              ← Trakt-based collaborative filtering for TV shows
 │   ├── src/
 │   │   ├── ingest.py       # fetch Trakt user ratings + show metadata
-│   │   ├── match.py        # find your 100 nearest neighbours + MY_TV_RATINGS dict
+│   │   ├── match.py        # load TV ratings from films/my_ratings.csv + find your 100 nearest neighbours
 │   │   ├── candidates.py   # collect shows your neighbours loved
 │   │   ├── scorer.py       # deterministic taste scorer (all weights here)
 │   │   ├── recommend.py    # interactive CLI entry point
@@ -112,15 +112,7 @@ TRAKT_CLIENT_ID=your_client_id_here
 ```
 
 **Add your TV ratings:**
-Open `shows/src/match.py` and edit the `MY_TV_RATINGS` dict at the top of the file. Keys are Trakt slugs (the URL segment from `trakt.tv/shows/breaking-bad`), values are your rating 1–10:
-```python
-MY_TV_RATINGS = {
-    "breaking-bad": 10,
-    "the-wire": 10,
-    "true-detective": 9,
-    # add your own...
-}
-```
+Nothing extra to do: the shows pipeline reads the TV Series / TV Mini Series rows of the same IMDb export as films (`films/my_ratings.csv`) and matches them to Trakt by IMDb ID. `match.py` prints any shows it couldn't match (shows that aren't in `shows_meta.parquet`).
 
 **Run the pipeline once (~2–5 min):**
 ```bash
@@ -306,7 +298,7 @@ python src/match.py
 python src/tmdb_recent.py --force   # refresh post-2020 pool with new seed films
 ```
 
-**Shows:** Edit `MY_TV_RATINGS` in `shows/src/match.py`, then re-run:
+**Shows:** Uses the same `films/my_ratings.csv`, so after replacing it, re-run:
 ```bash
 cd shows && python src/match.py
 ```

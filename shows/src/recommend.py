@@ -209,7 +209,7 @@ def print_recommendations(results: dict, n_neighbours: int, run_time: float, pre
     print(line)
     print(f"  {n_neighbours} neighbours · Trakt.tv · Run time: {run_time:.1f}s")
     print()
-    print("  Watched something new? Update MY_TV_RATINGS in src/match.py, then:")
+    print("  Watched something new? Replace films/my_ratings.csv with a fresh IMDb export, then:")
     print("  python src/match.py")
     print(line + "\n")
 
@@ -265,7 +265,7 @@ def main():
 
     sys.path.insert(0, str(Path(__file__).parent))
     from session import SessionPrefs
-    from match import MY_TV_RATINGS
+    from match import load_my_ratings
     from candidates import generate_candidates
     from scorer import score_and_select
     import pandas as pd
@@ -277,7 +277,7 @@ def main():
 
     t_start = time.time()
 
-    candidates = generate_candidates(MY_TV_RATINGS, prefs)
+    candidates = generate_candidates(load_my_ratings(), prefs)
 
     if len(candidates) == 0:
         print(
